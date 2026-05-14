@@ -1050,10 +1050,10 @@ body.light-mode .modal   { background:#fff; }
 
     <div class="nav-label">Sync</div>
     <button class="nav-btn" onclick="syncToSheets()" id="btn-sync-up">
-      <span class="icon">☁️</span><span class="nav-text">Sync to Sheets</span>
+      <span class="icon">☁️</span><span class="nav-text">Sync to Cloud</span>
     </button>
     <button class="nav-btn" onclick="syncFromSheets()" id="btn-sync-down">
-      <span class="icon">🔄</span><span class="nav-text">Load from Sheets</span>
+      <span class="icon">🔄</span><span class="nav-text">Load from Cloud</span>
     </button>
     <div style="padding:4px 8px;">
       <div id="sync-status" style="font-size:10px;color:var(--dim);font-family:'DM Mono',monospace;text-align:center;padding:4px 0;"></div>
@@ -3377,17 +3377,37 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ═══════════════════════════════════════════
 // MULTI-USER CONFIG
 // ═══════════════════════════════════════════
-const API_URL   = 'https://script.google.com/macros/s/AKfycbzgjOUz245MjgAjQVee_wPkjtfdBx_Vq1g5vhfwi6csl8EN3As4mcUFsycPgijbyIk/exec';
-const API_SECRET = '180243';
+// ═══════════════════════════════════════════
+// SUPABASE CONFIG
+// ═══════════════════════════════════════════
+const SUPA_URL = 'https://xfuxfmqjnhpgdclypumk.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmdXhmbXFqbmhwZ2RjbHlwdW1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTYzMzEsImV4cCI6MjA5NDI3MjMzMX0.-62sNHu5Wftr4Hz6O8QcP1jTL0T8CpdPxWZs8GHnjWw';
+
+// ─── Supabase REST helper ───────────────────
+async function supaFetch(path, method, body) {
+  method = method || 'GET';
+  var opts = {
+    method: method,
+    headers: {
+      'apikey': SUPA_KEY,
+      'Authorization': 'Bearer ' + SUPA_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': method === 'POST' ? 'return=representation' : ''
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  var res = await fetch(SUPA_URL + '/rest/v1/' + path, opts);
+  if (!res.ok) {
+    var err = await res.text();
+    throw new Error(err);
+  }
+  var text = await res.text();
+  return text ? JSON.parse(text) : null;
+}
 
 var currentUser = null; // { username, role }
 
-// ─── API helper ───────────────────────────
-async function api(params) {
-  var qs = Object.keys(params).map(function(k){ return k + '=' + encodeURIComponent(params[k]); }).join('&');
-  var res = await fetch(API_URL + '?' + qs);
-  return await res.json();
-}
+// api() replaced by supaFetch()
 
 
 // ═══════════════════════════════════════════
@@ -3423,7 +3443,13 @@ async function doRegister() {
   document.getElementById('loginErr').classList.remove('show');
   loadEl.style.display = 'block';
   try {
-    var json = await api({ action:'register', username, password: pass1, secret: API_SECRET });
+        // Check if username exists
+    var existing = await supaFetch('users?username=eq.' + encodeURIComponent(username) + '&select=username');
+    if (existing && existing.length > 0) {
+      showLoginErr('ชื่อผู้ใช้นี้ถูกใช้แล้ว'); loadEl.style.display = 'none'; return;
+    }
+    var newRows = await supaFetch('users', 'POST', { username, password: pass1, role: 'user' });
+    var json = (newRows && newRows.length > 0) ? { ok: true, username, role: 'user' } : { error: 'สมัครไม่สำเร็จ' };
     if (json.ok) {
       // auto login after register
       currentUser = { username, role: 'user', password: pass1 };
@@ -3469,29 +3495,26 @@ async function doLogin() {
   errEl.classList.remove('show');
   loadEl.style.display = 'block';
   try {
-    var json = await api({ action:'login', username, password, secret: API_SECRET });
-    if (json.ok) {
-      // บันทึก / ลบ remember me
+    var rows = await supaFetch('users?username=eq.' + encodeURIComponent(username) + '&password=eq.' + encodeURIComponent(password) + '&select=username,role');
+    if (rows && rows.length > 0) {
+      var user = rows[0];
       if (remember) {
         Store.set('rememberMe', JSON.stringify({ username, password }));
       } else {
         Store.set('rememberMe', '');
       }
-      currentUser = { username: json.username, role: json.role, password };
+      currentUser = { username: user.username, role: user.role, password };
       document.getElementById('loginScreen').classList.add('hidden');
-      document.getElementById('sideUsername').textContent = '👤 ' + json.username;
-      if (json.role === 'admin') document.getElementById('adminBtn').style.display = 'block';
-      // reset ข้อมูลก่อนโหลดของ user นี้
+      document.getElementById('sideUsername').textContent = '👤 ' + user.username;
+      if (user.role === 'admin') document.getElementById('adminBtn').style.display = 'block';
       db = { accounts:[{id:'default',name:'Main Account',balance:10000,initial:10000}], currentAccId:'default', trades:[], journals:{} };
       save(); refreshAll();
-      // โหลดข้อมูลจาก Sheets ก่อน แล้ว sync ขึ้นทันที
       await syncFromSheets(true);
       await syncToSheets();
-      // Auto-sync ทุก 5 นาที (ป้องกัน timer ซ้อน)
       if (window._autoSyncTimer) clearInterval(window._autoSyncTimer);
       window._autoSyncTimer = setInterval(syncToSheets, 5 * 60 * 1000);
     } else {
-      showLoginErr(json.error || 'เข้าสู่ระบบไม่สำเร็จ');
+      showLoginErr('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
   } catch(e) {
     showLoginErr('เชื่อมต่อไม่ได้: ' + e.message);
@@ -3536,20 +3559,19 @@ async function syncToSheets() {
   if (!currentUser) return;
   setSyncStatus('⬆️ กำลัง sync...', 'var(--gold)');
   try {
-    var json = await api({
-      action: 'save',
-      secret: API_SECRET,
-      username: currentUser.username,
-      password: currentUser.password,
-      value: JSON.stringify(db)
-    });
-    if (json.ok) {
-      var t = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
-      setSyncStatus('✅ Synced ' + t, 'var(--green)');
-      clearUnsaved();
+    var value = JSON.stringify(db);
+    // Check if record exists
+    var existing = await supaFetch('trade_data?username=eq.' + encodeURIComponent(currentUser.username) + '&select=username');
+    if (existing && existing.length > 0) {
+      // Update
+      await supaFetch('trade_data?username=eq.' + encodeURIComponent(currentUser.username), 'PATCH', { data: value, updated_at: new Date().toISOString() });
     } else {
-      setSyncStatus('❌ ' + (json.error||'Error'), 'var(--red)');
+      // Insert
+      await supaFetch('trade_data', 'POST', { username: currentUser.username, data: value, updated_at: new Date().toISOString() });
     }
+    var t = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
+    setSyncStatus('✅ Synced ' + t, 'var(--green)');
+    clearUnsaved();
   } catch(e) {
     setSyncStatus('❌ ' + e.message, 'var(--red)');
   }
@@ -3559,22 +3581,17 @@ async function syncFromSheets(silent) {
   if (!currentUser) return;
   if (!silent) setSyncStatus('⬇️ กำลังโหลด...', 'var(--gold)');
   try {
-    var json = await api({
-      action: 'load',
-      username: currentUser.username,
-      password: currentUser.password,
-      secret: API_SECRET
-    });
-    if (json.value) {
-      var remote = JSON.parse(json.value);
+    var rows = await supaFetch('trade_data?username=eq.' + encodeURIComponent(currentUser.username) + '&select=data,updated_at');
+    if (rows && rows.length > 0 && rows[0].data) {
+      var remote = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
       if (remote.trades || remote.accounts) {
-        if (silent || confirm('โหลดข้อมูลจาก Sheets?\n(' + (remote.trades||[]).length + ' trades)\nข้อมูลในเครื่องจะถูกแทนที่')) {
+        if (silent || confirm('โหลดข้อมูลจาก Cloud?\n(' + (remote.trades||[]).length + ' trades)\nข้อมูลในเครื่องจะถูกแทนที่')) {
           db = remote; save(); refreshAll();
           var t = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
           if (!silent) setSyncStatus('✅ โหลดแล้ว ' + t, 'var(--green)');
         } else { setSyncStatus('ยกเลิก', 'var(--dim)'); }
       }
-    } else if (json.value === null) {
+    } else {
       if (!silent) setSyncStatus('⚠️ ยังไม่มีข้อมูล', 'var(--gold)');
     }
   } catch(e) {
@@ -3594,7 +3611,8 @@ async function loadUserList() {
   var listEl = document.getElementById('userList');
   listEl.innerHTML = '<div style="color:var(--dim);font-size:12px;">กำลังโหลด...</div>';
   try {
-    var json = await api({ action:'getUsers', username: currentUser.username, password: currentUser.password, secret: API_SECRET });
+    var users = await supaFetch('users?select=username,role,created_at&order=created_at.asc');
+    var json = { users: users || [] };
     if (json.users) {
       listEl.innerHTML = json.users.map(u => `
         <div class="user-row">
@@ -3621,7 +3639,13 @@ async function adminAddUser() {
   var msgEl    = document.getElementById('adminMsg');
   if (!username || !password) { msgEl.style.color='var(--red)'; msgEl.textContent='กรุณากรอกให้ครบ'; return; }
   try {
-    var json = await api({ action:'addUser', username: currentUser.username, password: currentUser.password, secret: API_SECRET, newUser: username, newPass: password, newRole: role });
+    var json;
+    try {
+      await supaFetch('users', 'POST', { username, password, role });
+      json = { ok: true };
+    } catch(err) {
+      json = { error: 'มี username นี้แล้ว' };
+    }
     if (json.ok) {
       msgEl.style.color = 'var(--green)';
       msgEl.textContent = '✅ เพิ่มผู้ใช้ ' + username + ' แล้ว';
@@ -3642,7 +3666,8 @@ async function adminAddUser() {
 async function adminDeleteUser(username) {
   if (!confirm('ลบผู้ใช้ ' + username + '?')) return;
   try {
-    var json = await api({ action:'deleteUser', username: currentUser.username, password: currentUser.password, secret: API_SECRET, targetUser: username });
+    await supaFetch('users?username=eq.' + encodeURIComponent(username), 'DELETE');
+    var json = { ok: true };
     if (json.ok) { await loadUserList(); }
     else { toast(json.error || 'ไม่สำเร็จ', 'error'); }
   } catch(e) { toast(e.message, 'error'); }
@@ -3653,7 +3678,8 @@ async function changeMyPass() {
   var p2 = document.getElementById('newMyPass2').value;
   if (!p1 || p1 !== p2) { toast('รหัสผ่านไม่ตรงกัน', 'error'); return; }
   try {
-    var json = await api({ action:'changePass', username: currentUser.username, password: currentUser.password, secret: API_SECRET, newPass: p1 });
+    await supaFetch('users?username=eq.' + encodeURIComponent(currentUser.username), 'PATCH', { password: p1 });
+    var json = { ok: true };
     if (json.ok) {
       currentUser.password = p1;
       toast('เปลี่ยนรหัสผ่านแล้ว', 'success');
@@ -3718,7 +3744,8 @@ async function doChangeMyPass() {
   if (!p1 || p1.length < 4) { toast('รหัสผ่านต้องมีอย่างน้อย 4 ตัว', 'error'); return; }
   if (p1 !== p2) { toast('รหัสผ่านไม่ตรงกัน', 'error'); return; }
   try {
-    var json = await api({ action:'changePass', username: currentUser.username, password: currentUser.password, secret: API_SECRET, newPass: p1 });
+    await supaFetch('users?username=eq.' + encodeURIComponent(currentUser.username), 'PATCH', { password: p1 });
+    var json = { ok: true };
     if (json.ok) {
       currentUser.password = p1;
       document.getElementById('changePassOverlay').style.display = 'none';
