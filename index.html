@@ -894,6 +894,25 @@ body.light-mode .modal   { background:#fff; }
   font-family:'DM Mono',monospace;
 }
 
+
+/* ── Fund Modal ── */
+.fund-type-row { display:flex; gap:8px; margin-bottom:16px; }
+.fund-type-btn {
+  flex:1; padding:10px; border-radius:8px; border:1px solid var(--line);
+  background:var(--ink3); color:var(--muted); cursor:pointer;
+  font-family:'Sora',sans-serif; font-size:13px; font-weight:600;
+  transition:all 0.15s; text-align:center;
+}
+.fund-type-btn.deposit.active  { background:rgba(45,206,120,0.12); border-color:var(--green); color:var(--green); }
+.fund-type-btn.withdraw.active { background:rgba(255,77,106,0.12); border-color:var(--red); color:var(--red); }
+.fund-history-item {
+  display:flex; align-items:center; justify-content:space-between;
+  padding:10px 14px; background:var(--ink3); border:1px solid var(--line);
+  border-radius:8px; margin-bottom:6px;
+}
+.fund-history-type { font-size:11px; font-family:'DM Mono',monospace; }
+.fund-history-amount { font-size:14px; font-weight:700; font-family:'DM Mono',monospace; }
+
 </style>
 </head>
 <body>
@@ -1124,6 +1143,7 @@ body.light-mode .modal   { background:#fff; }
           <span id="mobileAccBalance">$0</span>
         </div>
         <button class="btn btn-ghost btn-sm" onclick="openAccountModal()">⚙ Accounts</button>
+        <button class="btn btn-ghost btn-sm" onclick="openFundModal()" title="ฝาก/ถอนเงิน">💰 ฝาก/ถอน</button>
         <button class="btn btn-gold" onclick="openAddTrade()">＋ Add Trade</button>
       </div>
     </div>
@@ -4414,6 +4434,158 @@ function initReminder() {
   }
 }
 
+
+// ═══════════════════════════════════════════
+// FUND MANAGEMENT (ฝาก/ถอนเงิน)
+// ═══════════════════════════════════════════
+var _fundType = 'deposit';
+
+function openFundModal() {
+  _fundType = 'deposit';
+  selectFundType('deposit');
+  // Set today
+  var today = new Date().toISOString().split('T')[0];
+  document.getElementById('fundDate').value = today;
+  document.getElementById('fundAmount').value = '';
+  document.getElementById('fundNote').value = '';
+  updateFundPreview();
+  renderFundHistory();
+  document.getElementById('fundOverlay').style.display = 'flex';
+}
+
+function closeFundModal() {
+  document.getElementById('fundOverlay').style.display = 'none';
+}
+
+function selectFundType(type) {
+  _fundType = type;
+  var btnD = document.getElementById('fundTypeDeposit');
+  var btnW = document.getElementById('fundTypeWithdraw');
+  btnD.classList.toggle('active', type === 'deposit');
+  btnW.classList.toggle('active', type === 'withdraw');
+  updateFundPreview();
+}
+
+function updateFundPreview() {
+  var amount = parseFloat(document.getElementById('fundAmount') ? document.getElementById('fundAmount').value : 0) || 0;
+  var acc = currentAcc();
+  var newBal = _fundType === 'deposit' ? acc.balance + amount : acc.balance - amount;
+  var el = document.getElementById('fundBalPreview');
+  if (el) {
+    el.textContent = (newBal >= 0 ? '+' : '') + '$' + Math.abs(newBal).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2});
+    el.style.color = newBal >= acc.balance ? 'var(--green)' : 'var(--red)';
+  }
+}
+
+// Hook amount input to update preview
+document.addEventListener('DOMContentLoaded', function() {
+  var inp = document.getElementById('fundAmount');
+  if (inp) inp.addEventListener('input', updateFundPreview);
+});
+
+function saveFund() {
+  var amount = parseFloat(document.getElementById('fundAmount').value);
+  var date   = document.getElementById('fundDate').value;
+  var note   = document.getElementById('fundNote').value.trim();
+
+  if (!amount || amount <= 0) { toast('กรุณากรอกจำนวนเงิน', 'error'); return; }
+  if (!date) { toast('กรุณาเลือกวันที่', 'error'); return; }
+
+  var acc = currentAcc();
+  var entry = {
+    id: 'fund_' + Date.now(),
+    type: _fundType,
+    amount: amount,
+    date: date,
+    note: note,
+    balBefore: acc.balance,
+    balAfter: _fundType === 'deposit' ? acc.balance + amount : acc.balance - amount
+  };
+
+  // Update balance
+  if (_fundType === 'deposit') {
+    acc.balance += amount;
+    acc.initial = (acc.initial || 0) + amount; // เพิ่ม initial ด้วยเพื่อให้ P&L ถูก
+  } else {
+    if (amount > acc.balance) {
+      toast('ยอดเงินไม่พอถอน', 'error'); return;
+    }
+    acc.balance -= amount;
+  }
+
+  // Save to fund history
+  if (!db.fundHistory) db.fundHistory = {};
+  if (!db.fundHistory[db.currentAccId]) db.fundHistory[db.currentAccId] = [];
+  db.fundHistory[db.currentAccId].unshift(entry);
+
+  save();
+  refreshAll();
+  renderFundHistory();
+  updateFundPreview();
+  syncToSheets();
+
+  var label = _fundType === 'deposit' ? 'ฝากเงิน' : 'ถอนเงิน';
+  toast(label + ' $' + amount.toFixed(2) + ' แล้ว', 'success');
+
+  document.getElementById('fundAmount').value = '';
+  document.getElementById('fundNote').value = '';
+}
+
+function renderFundHistory() {
+  var list = document.getElementById('fundHistoryList');
+  if (!list) return;
+  var history = (db.fundHistory && db.fundHistory[db.currentAccId]) || [];
+  if (!history.length) {
+    list.innerHTML = '<div style="text-align:center;color:var(--dim);font-size:12px;padding:16px;">ยังไม่มีรายการ</div>';
+    return;
+  }
+    list.innerHTML = history.slice(0, 20).map(function(h) {
+    var isDeposit = h.type === 'deposit';
+    var color = isDeposit ? 'var(--green)' : 'var(--red)';
+    var icon  = isDeposit ? '➕' : '➖';
+    var label = isDeposit ? 'ฝากเงิน' : 'ถอนเงิน';
+    var mono = 'monospace';
+    var row = document.createElement('div');
+    row.className = 'fund-history-item';
+    row.innerHTML = '<div>' +
+      '<div class="fund-history-type" style="color:' + color + '">' + icon + ' ' + label + '</div>' +
+      '<div style="font-size:10px;color:var(--dim);font-family:' + mono + ';margin-top:2px;">' + h.date + (h.note ? ' &middot; ' + h.note : '') + '</div>' +
+      '</div>' +
+      '<div style="text-align:right;">' +
+      '<div class="fund-history-amount" style="color:' + color + '">' + (isDeposit?'+':'-') + '$' + h.amount.toFixed(2) + '</div>' +
+      '<div style="font-size:10px;color:var(--dim);font-family:' + mono + ';">bal: $' + (h.balAfter||0).toFixed(2) + '</div>' +
+      '</div>';
+    var btn = document.createElement('button');
+    btn.textContent = '✕';
+    btn.title = 'ลบ';
+    btn.style.cssText = 'margin-left:10px;background:none;border:none;color:var(--dim);cursor:pointer;font-size:14px;';
+    btn.onclick = function() { deleteFund(h.id); };
+    row.appendChild(btn);
+    return row.outerHTML;
+  }).join('');
+}
+
+function deleteFund(id) {
+  if (!confirm('ลบรายการนี้?')) return;
+  var history = (db.fundHistory && db.fundHistory[db.currentAccId]) || [];
+  var entry = history.find(function(h){ return h.id === id; });
+  if (!entry) return;
+
+  // Reverse balance change
+  var acc = currentAcc();
+  if (entry.type === 'deposit') {
+    acc.balance -= entry.amount;
+    acc.initial = Math.max(0, (acc.initial||0) - entry.amount);
+  } else {
+    acc.balance += entry.amount;
+  }
+
+  db.fundHistory[db.currentAccId] = history.filter(function(h){ return h.id !== id; });
+  save(); refreshAll(); renderFundHistory(); updateFundPreview();
+  syncToSheets();
+  toast('ลบรายการแล้ว', 'info');
+}
+
 </script>
 
 <!-- ══ TOAST CONTAINER ══ -->
@@ -4581,6 +4753,62 @@ function initReminder() {
       <button class="btn btn-gold" style="width:100%;justify-content:center;" onclick="saveReminderSettings()">
         💾 บันทึกการตั้งค่า
       </button>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══ FUND MODAL (ฝาก/ถอนเงิน) ══ -->
+<div class="overlay" id="fundOverlay" style="display:none;align-items:center;justify-content:center;" onclick="if(event.target===this)closeFundModal()">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-head">
+      <h2>💰 ฝาก / ถอนเงิน</h2>
+      <button class="modal-close" onclick="closeFundModal()">✕</button>
+    </div>
+    <div class="modal-body">
+      <!-- Type selector -->
+      <div class="fund-type-row">
+        <button class="fund-type-btn deposit active" id="fundTypeDeposit" onclick="selectFundType('deposit')">
+          ➕ ฝากเงิน
+        </button>
+        <button class="fund-type-btn withdraw" id="fundTypeWithdraw" onclick="selectFundType('withdraw')">
+          ➖ ถอนเงิน
+        </button>
+      </div>
+
+      <!-- Amount -->
+      <div class="form-grid" style="margin-bottom:14px;">
+        <div class="fg">
+          <label>จำนวนเงิน ($)</label>
+          <input type="number" id="fundAmount" placeholder="0.00" min="0" step="0.01">
+        </div>
+        <div class="fg">
+          <label>วันที่</label>
+          <input type="date" id="fundDate">
+        </div>
+      </div>
+
+      <!-- Note -->
+      <div class="fg" style="margin-bottom:16px;">
+        <label>หมายเหตุ (ไม่บังคับ)</label>
+        <input type="text" id="fundNote" placeholder="เช่น โอนเงินเพิ่มทุน, ถอนกำไร...">
+      </div>
+
+      <!-- Balance preview -->
+      <div style="background:var(--ink3);border:1px solid var(--line);border-radius:10px;padding:12px 16px;margin-bottom:16px;">
+        <div style="font-size:11px;color:var(--dim);margin-bottom:6px;font-family:'DM Mono',monospace;">ยอด Balance หลังทำรายการ</div>
+        <div id="fundBalPreview" style="font-size:20px;font-weight:700;font-family:'DM Mono',monospace;color:var(--gold);">$0.00</div>
+      </div>
+
+      <button class="btn btn-gold" style="width:100%;justify-content:center;" onclick="saveFund()">
+        บันทึกรายการ
+      </button>
+
+      <!-- History -->
+      <div style="margin-top:20px;">
+        <div style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;margin-bottom:10px;">ประวัติฝาก/ถอน</div>
+        <div id="fundHistoryList"></div>
+      </div>
     </div>
   </div>
 </div>
