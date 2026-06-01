@@ -13,6 +13,210 @@
   <meta name="apple-mobile-web-app-title" content="TradeLog">
   <link rel="apple-touch-icon" href="icon-192.png">
   <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js">
+// ═══════════════════════════════════════════
+// COMPOUND CALCULATOR
+// ═══════════════════════════════════════════
+var compoundState = [];
+var compoundChart = null;
+
+function initCompound() {
+  // Load from db (synced via Supabase)
+  try {
+    var key = 'compound_' + (db.currentAccId||'default');
+    if (db.compound && db.compound[key]) {
+      compoundState = db.compound[key].state || [];
+      // Restore settings
+      var cfg = db.compound[key].config;
+      if (cfg) {
+        if (cfg.cap)  document.getElementById('c_cap').value  = cfg.cap;
+        if (cfg.rate) document.getElementById('c_rate').value = cfg.rate;
+        if (cfg.days) document.getElementById('c_days').value = cfg.days;
+        if (cfg.thb)  document.getElementById('c_thb').value  = cfg.thb;
+      }
+    }
+  } catch(e) {}
+}
+
+function saveCompound() {
+  var key = 'compound_' + (db.currentAccId||'default');
+  if (!db.compound) db.compound = {};
+  db.compound[key] = {
+    state: compoundState,
+    config: {
+      cap:  document.getElementById('c_cap')  ? document.getElementById('c_cap').value  : 1000,
+      rate: document.getElementById('c_rate') ? document.getElementById('c_rate').value : 5,
+      days: document.getElementById('c_days') ? document.getElementById('c_days').value : 30,
+      thb:  document.getElementById('c_thb')  ? document.getElementById('c_thb').value  : 35
+    }
+  };
+  save(); // บันทึกลง localStorage และ sync ขึ้น Supabase
+  syncToSheets();
+}
+
+function buildCompoundState() {
+  var cap  = parseFloat(document.getElementById('c_cap').value)  || 1000;
+  var rate = parseFloat(document.getElementById('c_rate').value) / 100 || 0.05;
+  var days = parseInt(document.getElementById('c_days').value)   || 30;
+  var prev = compoundState.slice();
+  compoundState = [];
+  var bal = cap;
+  for (var d = 1; d <= days; d++) {
+    var profit = bal * rate;
+    var end    = bal + profit;
+    var old    = prev.find(function(r){ return r.day === d; });
+    compoundState.push({
+      day: d, start: bal, profit: profit, end: end,
+      checked: old ? old.checked : false,
+      date:    old ? old.date    : ''
+    });
+    bal = end;
+  }
+}
+
+function formatDateTH(iso) {
+  if (!iso) return '';
+  var p = iso.split('-');
+  if (p.length !== 3) return iso;
+  return p[2] + '/' + p[1] + '/' + p[0];
+}
+
+function parseFromTH(dd_mm_yyyy) {
+  if (!dd_mm_yyyy) return '';
+  var p = dd_mm_yyyy.split('/');
+  if (p.length !== 3) return '';
+  return p[2] + '-' + p[1] + '-' + p[0];
+}
+
+function renderCompound() {
+  if (!document.getElementById('c_cap')) return;
+  buildCompoundState();
+
+  var cap     = parseFloat(document.getElementById('c_cap').value) || 1000;
+  var thbRate = parseFloat(document.getElementById('c_thb').value) || 35;
+  var days    = compoundState.length;
+  var done    = compoundState.filter(function(r){ return r.checked; }).length;
+  var curBal  = done > 0 ? compoundState[done-1].end : cap;
+  var target  = days > 0 ? compoundState[days-1].end : cap;
+  var profit  = curBal - cap;
+
+  // Stats
+  document.getElementById('compoundStats').innerHTML = [
+    { label:'ความคืบหน้า', val: done + ' / ' + days + ' วัน', color:'' },
+    { label:'ทุนปัจจุบัน', val: '$' + curBal.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}), color:'var(--green)' },
+    { label:'เป้าหมาย', val: '$' + target.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}), color:'' },
+    { label:'เป็น THB', val: '฿' + Math.round(curBal * thbRate).toLocaleString('th'), color:'var(--gold)' }
+  ].map(function(s){
+    return '<div class="compound-stat">' +
+      '<div class="compound-stat-label">' + s.label + '</div>' +
+      '<div class="compound-stat-val"' + (s.color ? ' style="color:' + s.color + '"' : '') + '>' + s.val + '</div>' +
+    '</div>';
+  }).join('');
+
+  // Progress bar
+  document.getElementById('compoundProgBar').style.width = (done / days * 100).toFixed(1) + '%';
+
+  // Checklist
+  var cl = document.getElementById('compoundChecklist');
+  cl.innerHTML = compoundState.map(function(r) {
+    var cls   = 'compound-day-row' + (r.checked ? ' done' : '');
+    var bs    = '$' + r.start.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+    var pf    = '+$' + r.profit.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+    var be    = '$' + r.end.toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2});
+    var disp  = formatDateTH(r.date);
+    return '<div class="' + cls + '">' +
+      '<div class="c-day-num" style="font-family:monospace;color:var(--dim);">' + r.day + '</div>' +
+      '<div style="font-family:monospace;">' +
+        '<span style="color:var(--dim);">' + bs + '</span>' +
+        '<span style="color:var(--green);margin:0 4px;">' + pf + '</span>' +
+        '<span style="font-weight:600;">' + be + '</span>' +
+      '</div>' +
+      '<input class="c-date-input" type="text" placeholder="dd/mm/yyyy" maxlength="10"' +
+        ' value="' + disp + '"' + (r.checked ? '' : ' disabled') +
+        ' data-day="' + r.day + '" oninput="onCompoundDateInput(this)">' +
+      '<button class="c-check-btn' + (r.checked ? ' checked' : '') + '" data-day="' + r.day + '" onclick="toggleCompound(' + (r.day-1) + ')">' +
+        (r.checked ? '✓' : '') +
+      '</button>' +
+    '</div>';
+  }).join('');
+
+  renderCompoundChart();
+  saveCompound();
+}
+
+function onCompoundDateInput(el) {
+  var val = el.value.replace(/[^0-9]/g,'');
+  var fmt = '';
+  if (val.length >= 2) fmt = val.substr(0,2) + '/';
+  if (val.length >= 4) fmt += val.substr(2,2) + '/';
+  if (val.length >= 5) fmt += val.substr(4,4);
+  else if (val.length > 4) fmt += val.substr(4);
+  el.value = fmt;
+  var day = parseInt(el.dataset.day) - 1;
+  compoundState[day].date = parseFromTH(el.value);
+  saveCompound();
+}
+
+function toggleCompound(i) {
+  compoundState[i].checked = !compoundState[i].checked;
+  if (compoundState[i].checked && !compoundState[i].date) {
+    var t = new Date();
+    var dd = String(t.getDate()).padStart(2,'0');
+    var mm = String(t.getMonth()+1).padStart(2,'0');
+    var yyyy = t.getFullYear();
+    compoundState[i].date = yyyy + '-' + mm + '-' + dd;
+  }
+  if (!compoundState[i].checked) compoundState[i].date = '';
+  renderCompound();
+}
+
+function renderCompoundChart() {
+  var cap  = parseFloat(document.getElementById('c_cap').value) || 1000;
+  var labels = ['0'];
+  var targetData = [cap];
+  var actualData = [cap];
+
+  compoundState.forEach(function(r) {
+    labels.push(String(r.day));
+    targetData.push(parseFloat(r.end.toFixed(2)));
+    actualData.push(r.checked ? parseFloat(r.end.toFixed(2)) : null);
+  });
+
+  var el = document.getElementById('compoundChart');
+  if (!el) return;
+
+  if (compoundChart) {
+    compoundChart.data.labels = labels;
+    compoundChart.data.datasets[0].data = targetData;
+    compoundChart.data.datasets[1].data = actualData;
+    compoundChart.update();
+    return;
+  }
+
+  compoundChart = new Chart(el, {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'เป้าหมาย', data: targetData, borderColor: 'var(--line)', borderDash:[5,4], pointRadius:0, borderWidth:1.5, tension:0.3, fill:false },
+        { label: 'จริง', data: actualData, borderColor: 'var(--green)', backgroundColor: 'rgba(45,206,120,0.1)', fill:true, pointRadius:4, pointBackgroundColor:'var(--green)', borderWidth:2, tension:0.3, spanGaps:false }
+      ]
+    },
+    options: {
+      responsive:true, maintainAspectRatio:false,
+      plugins: {
+        legend: { display:false },
+        tooltip: { callbacks: { label: function(ctx){ return (ctx.dataset.label||'') + ': $' + (ctx.raw||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}); } } }
+      },
+      scales: {
+        x: { ticks:{ color:'var(--dim)', font:{size:11}, maxTicksLimit:10 }, grid:{ color:'rgba(255,255,255,0.05)' } },
+        y: { ticks:{ color:'var(--dim)', font:{size:11}, callback:function(v){ return '$'+(v>=1000?(v/1000).toFixed(1)+'k':v); } }, grid:{ color:'rgba(255,255,255,0.05)' } }
+      }
+    }
+  });
+}
+
+</script>
   <link href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300&family=Sora:wght@300;400;600;700;800&display=swap" rel="stylesheet">
 <style>
 :root {
@@ -913,6 +1117,26 @@ body.light-mode .modal   { background:#fff; }
 .fund-history-type { font-size:11px; font-family:'DM Mono',monospace; }
 .fund-history-amount { font-size:14px; font-weight:700; font-family:'DM Mono',monospace; }
 
+
+/* ── Compound Calculator ── */
+.compound-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+.compound-stat { background:var(--ink2); border:1px solid var(--line); border-radius:var(--radius); padding:14px; text-align:center; }
+.compound-stat-label { font-size:11px; color:var(--dim); margin-bottom:4px; font-family:'DM Mono',monospace; text-transform:uppercase; letter-spacing:1px; }
+.compound-stat-val { font-size:18px; font-weight:700; color:var(--bright); font-family:'DM Mono',monospace; }
+.compound-prog-wrap { height:8px; background:var(--ink3); border-radius:4px; overflow:hidden; margin-bottom:16px; }
+.compound-prog-fill { height:100%; background:var(--green); border-radius:4px; transition:width 0.4s; }
+.compound-day-row { display:grid; grid-template-columns:48px 1fr 130px 44px; align-items:center; gap:8px; padding:7px 14px; border-top:1px solid var(--line); font-size:12px; }
+.compound-day-row.done { background:rgba(45,206,120,0.06); }
+.compound-day-row.done .c-day-num { color:var(--green); font-weight:600; }
+.c-check-btn { width:28px; height:28px; border-radius:6px; border:1.5px solid var(--line); background:var(--ink3); cursor:pointer; display:flex; align-items:center; justify-content:center; font-size:14px; transition:all 0.15s; color:var(--text); }
+.c-check-btn.checked { background:var(--green); border-color:var(--green); color:#fff; }
+.c-date-input { font-size:12px; padding:5px 8px; border-radius:6px; border:1px solid var(--line); background:var(--ink3); color:var(--text); width:100%; box-sizing:border-box; font-family:'DM Mono',monospace; }
+.c-date-input:disabled { opacity:0.3; cursor:not-allowed; }
+@media(max-width:600px){
+  .compound-grid { grid-template-columns:1fr 1fr; }
+  .compound-day-row { grid-template-columns:36px 1fr 110px 36px; padding:6px 10px; font-size:11px; }
+}
+
 </style>
 </head>
 <body>
@@ -1065,6 +1289,9 @@ body.light-mode .modal   { background:#fff; }
     </button>
     <button class="nav-btn" onclick="switchPage('playbook')" id="nav-playbook">
       <span class="icon">📖</span><span class="nav-text">Playbook</span>
+    </button>
+    <button class="nav-btn" onclick="switchPage('compound')" id="nav-compound">
+      <span class="icon">📈</span><span class="nav-text">Compound</span>
     </button>
 
     <div class="nav-label">Sync</div>
@@ -1447,6 +1674,70 @@ body.light-mode .modal   { background:#fff; }
             <div class="empty-icon">📖</div>
             <div class="empty-text">ยังไม่มี Playbook<br><small style="color:var(--dim)">บันทึก setup ที่คุณเทรดบ่อยๆ ไว้เป็น template</small></div>
           </div>
+        </div>
+      </div>
+
+
+      <!-- ══ Compound Page ══ -->
+      <div class="page" id="page-compound">
+        <div class="section-head" style="margin-bottom:16px;">
+          <h2 class="section-title">📈 Compound Calculator</h2>
+        </div>
+
+        <!-- Settings -->
+        <div class="card" style="margin-bottom:16px;">
+          <div class="section-badge" style="margin-bottom:12px;">⚙️ ตั้งค่า Goal</div>
+          <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;">
+            <div class="fg">
+              <label>ทุนเริ่มต้น ($)</label>
+              <input type="number" id="c_cap" value="1000" min="1" step="100" oninput="renderCompound()">
+            </div>
+            <div class="fg">
+              <label>กำไรต่อวัน (%)</label>
+              <input type="number" id="c_rate" value="5" min="0.1" max="100" step="0.1" oninput="renderCompound()">
+            </div>
+            <div class="fg">
+              <label>เป้าหมาย (วัน)</label>
+              <input type="number" id="c_days" value="30" min="1" max="365" step="1" oninput="renderCompound()">
+            </div>
+            <div class="fg">
+              <label>อัตรา THB/$</label>
+              <input type="number" id="c_thb" value="35" min="1" step="0.1" oninput="renderCompound()">
+            </div>
+          </div>
+        </div>
+
+        <!-- Stats -->
+        <div class="compound-grid" id="compoundStats"></div>
+
+        <!-- Progress bar -->
+        <div class="compound-prog-wrap">
+          <div class="compound-prog-fill" id="compoundProgBar" style="width:0%"></div>
+        </div>
+
+        <!-- Chart -->
+        <div class="card" style="margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+            <div style="font-size:13px;font-weight:600;color:var(--bright);">Progress Chart</div>
+            <div style="display:flex;gap:12px;font-size:11px;color:var(--dim);">
+              <span style="display:flex;align-items:center;gap:4px;"><span style="width:20px;height:2px;background:var(--line);display:inline-block;border-radius:2px;"></span>เป้าหมาย</span>
+              <span style="display:flex;align-items:center;gap:4px;"><span style="width:20px;height:2px;background:var(--green);display:inline-block;border-radius:2px;"></span>จริง</span>
+            </div>
+          </div>
+          <div style="position:relative;height:220px;">
+            <canvas id="compoundChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Checklist -->
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div style="display:grid;grid-template-columns:48px 1fr 130px 44px;gap:8px;padding:10px 14px;background:var(--ink3);font-size:11px;font-weight:600;color:var(--dim);text-transform:uppercase;letter-spacing:0.5px;">
+            <div>Day</div>
+            <div>ทุน → สิ้นวัน</div>
+            <div>วันที่ทำได้</div>
+            <div></div>
+          </div>
+          <div id="compoundChecklist" style="max-height:480px;overflow-y:auto;"></div>
         </div>
       </div>
 
@@ -1952,7 +2243,7 @@ function save(){ Store.set('tradelog', JSON.stringify(db)); if(typeof markUnsave
 // ═══════════════════════════════════════════
 // PAGE SWITCHING
 // ═══════════════════════════════════════════
-const pages = ['dashboard','trades','stats','journal','playbook'];
+const pages = ['dashboard','trades','stats','journal','playbook','compound'];
 function switchPage(p){
   pages.forEach(id=>{
     const pg = document.getElementById('page-'+id);
@@ -1966,6 +2257,7 @@ function switchPage(p){
   if(p==='stats')   renderStats();
   if(p==='journal') renderJournalPage();
   if(p==='playbook') renderPlaybook();
+  if(p==='compound') { initCompound(); renderCompound(); }
 }
 
 // ═══════════════════════════════════════════
@@ -3294,7 +3586,7 @@ function showTradeDetail(id){
         <span class="dir-badge ${dirCls}">${t.direction}</span>
         <span style="font-size:13px;color:var(--muted);font-family:'DM Mono',monospace;">${t.date}</span>
       </div>
-      <div class="${pnlCls}" style="font-size:24px;font-family:'DM Mono',monospace;font-weight:700;">${pnl>=0?'+':''}$${Math.abs(pnl).toFixed(2)}</div>
+      <div class="${pnlCls}" style="font-size:24px;font-family:monospace;font-weight:700;">${pnl>=0?'+':''}$${Math.abs(pnl).toFixed(2)}</div>
     </div>
 
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px;">
@@ -3369,6 +3661,7 @@ function refreshAll(){
 // INIT
 // ═══════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',()=>{
+  initCompound();
   initTheme();
   initDDSettings();
   initRememberMe();
@@ -3607,6 +3900,7 @@ async function syncFromSheets(silent) {
       if (remote.trades || remote.accounts) {
         if (silent || confirm('โหลดข้อมูลจาก Cloud?\n(' + (remote.trades||[]).length + ' trades)\nข้อมูลในเครื่องจะถูกแทนที่')) {
           db = remote; save(); refreshAll();
+          initCompound(); // โหลด compound state จาก db ใหม่
           var t = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
           if (!silent) setSyncStatus('✅ โหลดแล้ว ' + t, 'var(--green)');
         } else { setSyncStatus('ยกเลิก', 'var(--dim)'); }
