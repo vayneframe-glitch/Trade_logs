@@ -17,6 +17,36 @@
 // ═══════════════════════════════════════════
 // COMPOUND CALCULATOR
 // ═══════════════════════════════════════════
+
+// ═══════════════════════════════════════════
+// STORAGE — works on file:// & http://
+// ═══════════════════════════════════════════
+const Store = (() => {
+  let mem = {};
+  let ok = false;
+  try { localStorage.setItem('_t','1'); localStorage.removeItem('_t'); ok=true; } catch(e){}
+  return {
+    get(k){ try{ return ok ? localStorage.getItem(k) : (mem[k]??null); }catch(e){ return mem[k]??null; } },
+    set(k,v){ try{ if(ok) localStorage.setItem(k,v); mem[k]=v; }catch(e){ mem[k]=v; } }
+  };
+})();
+
+// ═══════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════
+let db = JSON.parse(Store.get('tradelog')) || {
+  accounts: [{id:'default', name:'Main Account', balance:10000, initial:10000}],
+  currentAccId: 'default',
+  trades: [],
+  journals: {}
+};
+let calDate = new Date();
+let panelDate = null;
+let editTradeId = null;
+let selectedDir = 'LONG';
+let selectedBias = '';
+let selectedJBias = '';
+
 var compoundState = [];
 var compoundChart = null;
 
@@ -2206,34 +2236,6 @@ body.light-mode .modal   { background:#fff; }
 </div>
 
 <script>
-// ═══════════════════════════════════════════
-// STORAGE — works on file:// & http://
-// ═══════════════════════════════════════════
-const Store = (() => {
-  let mem = {};
-  let ok = false;
-  try { localStorage.setItem('_t','1'); localStorage.removeItem('_t'); ok=true; } catch(e){}
-  return {
-    get(k){ try{ return ok ? localStorage.getItem(k) : (mem[k]??null); }catch(e){ return mem[k]??null; } },
-    set(k,v){ try{ if(ok) localStorage.setItem(k,v); mem[k]=v; }catch(e){ mem[k]=v; } }
-  };
-})();
-
-// ═══════════════════════════════════════════
-// STATE
-// ═══════════════════════════════════════════
-let db = JSON.parse(Store.get('tradelog')) || {
-  accounts: [{id:'default', name:'Main Account', balance:10000, initial:10000}],
-  currentAccId: 'default',
-  trades: [],
-  journals: {}
-};
-let calDate = new Date();
-let panelDate = null;
-let editTradeId = null;
-let selectedDir = 'LONG';
-let selectedBias = '';
-let selectedJBias = '';
 
 // ═══════════════════════════════════════════
 // SAVE
@@ -3661,7 +3663,6 @@ function refreshAll(){
 // INIT
 // ═══════════════════════════════════════════
 document.addEventListener('DOMContentLoaded',()=>{
-  initCompound();
   initTheme();
   initDDSettings();
   initRememberMe();
@@ -3672,6 +3673,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   buildScores([{id:'j-disc',val:0},{id:'j-plan',val:0},{id:'j-risk',val:0}]);
   initChips();
   refreshAll();
+  initCompound(); // ต้องเรียกหลัง db พร้อมแล้ว
 
   // Redraw charts on resize
   window.addEventListener('resize', ()=>{
