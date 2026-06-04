@@ -240,8 +240,8 @@ function renderCompoundChart() {
         tooltip: { callbacks: { label: function(ctx){ return (ctx.dataset.label||'') + ': $' + (ctx.raw||0).toLocaleString('en',{minimumFractionDigits:2,maximumFractionDigits:2}); } } }
       },
       scales: {
-        x: { ticks:{ color:'var(--dim)', font:{size:11}, maxTicksLimit:10 }, grid:{ color:'rgba(255,255,255,0.05)' } },
-        y: { ticks:{ color:'var(--dim)', font:{size:11}, callback:function(v){ return '$'+(v>=1000?(v/1000).toFixed(1)+'k':v); } }, grid:{ color:'rgba(255,255,255,0.05)' } }
+        x: { ticks:{ color: document.body.classList.contains('light-mode')?'#333':'#ccc', font:{size:11}, maxTicksLimit:10 }, grid:{ color:'rgba(128,128,128,0.12)' } },
+        y: { ticks:{ color: document.body.classList.contains('light-mode')?'#333':'#ccc', font:{size:11}, callback:function(v){ return '$'+(v>=1000?(v/1000).toFixed(1)+'k':v); } }, grid:{ color:'rgba(128,128,128,0.12)' } }
       }
     }
   });
@@ -2115,26 +2115,32 @@ body.light-mode .modal   { background:#fff; }
         <!-- Before -->
         <div>
           <label style="font-size:11px;color:var(--dim);margin-bottom:6px;display:block;">📷 Before</label>
-          <div id="j-before-wrap" onclick="document.getElementById('j-before-input').click()"
-            ondrop="handleJImgDrop(event,'before')" ondragover="e=>e.preventDefault()"
+          <div id="j-before-wrap" onclick="jImgWrapClick('before')"
+            ondrop="handleJImgDrop(event,'before')" ondragover="event.preventDefault()"
             style="border:2px dashed var(--line);border-radius:10px;min-height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative;background:var(--card);">
             <img id="j-before-preview" src="" style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;border-radius:8px;">
             <span id="j-before-placeholder" style="font-size:22px;opacity:0.4;">＋</span>
             <input type="file" id="j-before-input" accept="image/*" style="display:none" onchange="handleJImgFile(this,'before')">
           </div>
-          <button onclick="clearJImg('before')" style="margin-top:4px;font-size:10px;color:var(--dim);background:none;border:none;cursor:pointer;width:100%;">✕ ลบรูป</button>
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <button onclick="clearJImg('before')" style="flex:1;font-size:10px;color:var(--dim);background:none;border:none;cursor:pointer;">✕ ลบรูป</button>
+            <button onclick="document.getElementById('j-before-input').click()" style="flex:1;font-size:10px;color:var(--dim);background:none;border:none;cursor:pointer;">📁 เปลี่ยนรูป</button>
+          </div>
         </div>
         <!-- After -->
         <div>
           <label style="font-size:11px;color:var(--dim);margin-bottom:6px;display:block;">📸 After</label>
-          <div id="j-after-wrap" onclick="document.getElementById('j-after-input').click()"
-            ondrop="handleJImgDrop(event,'after')" ondragover="e=>e.preventDefault()"
+          <div id="j-after-wrap" onclick="jImgWrapClick('after')"
+            ondrop="handleJImgDrop(event,'after')" ondragover="event.preventDefault()"
             style="border:2px dashed var(--line);border-radius:10px;min-height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative;background:var(--card);">
             <img id="j-after-preview" src="" style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;border-radius:8px;">
             <span id="j-after-placeholder" style="font-size:22px;opacity:0.4;">＋</span>
             <input type="file" id="j-after-input" accept="image/*" style="display:none" onchange="handleJImgFile(this,'after')">
           </div>
-          <button onclick="clearJImg('after')" style="margin-top:4px;font-size:10px;color:var(--dim);background:none;border:none;cursor:pointer;width:100%;">✕ ลบรูป</button>
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <button onclick="clearJImg('after')" style="flex:1;font-size:10px;color:var(--dim);background:none;border:none;cursor:pointer;">✕ ลบรูป</button>
+            <button onclick="document.getElementById('j-after-input').click()" style="flex:1;font-size:10px;color:var(--dim);background:none;border:none;cursor:pointer;">📁 เปลี่ยนรูป</button>
+          </div>
         </div>
       </div>
     </div>
@@ -3155,37 +3161,54 @@ function setJImgPreview(slot, src){
   }
 }
 
-function handleJImgFile(input, slot){
-  const file = input.files[0];
-  if(!file) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const key = db.currentAccId+'_'+panelDate;
-    db.journals[key] = db.journals[key] || {};
-    db.journals[key]['img'+slot.charAt(0).toUpperCase()+slot.slice(1)] = e.target.result;
-    setJImgPreview(slot, e.target.result);
-    save();
-    toast('อัปโหลดรูป '+slot+' แล้ว', 'success');
-  };
-  reader.readAsDataURL(file);
+function jImgWrapClick(slot){
+  // ถ้ามีรูปอยู่แล้ว → ดูรูป fullscreen
+  const preview = document.getElementById('j-'+slot+'-preview');
+  if(preview && preview.src && preview.style.display !== 'none'){
+    openJImgFullscreen(slot);
+  } else {
+    // ยังไม่มีรูป → เลือกรูป
+    document.getElementById('j-'+slot+'-input').click();
+  }
 }
 
-function handleJImgDrop(event, slot){
-  event.preventDefault();
-  const file = event.dataTransfer.files[0];
-  if(!file || !file.type.startsWith('image/')) return;
-  const reader = new FileReader();
-  reader.onload = e => {
-    const key = db.currentAccId+'_'+panelDate;
-    db.journals[key] = db.journals[key] || {};
-    db.journals[key]['img'+slot.charAt(0).toUpperCase()+slot.slice(1)] = e.target.result;
-    setJImgPreview(slot, e.target.result);
-    save();
-    toast('อัปโหลดรูป '+slot+' แล้ว', 'success');
-  };
-  reader.readAsDataURL(file);
-}
+function openJImgFullscreen(slot){
+  const key = db.currentAccId+'_'+panelDate;
+  const j = db.journals[key] || {};
+  const imgBefore = j.imgBefore || '';
+  const imgAfter  = j.imgAfter  || '';
+  const imgs = [];
+  if(imgBefore) imgs.push({label:'Before', src:imgBefore});
+  if(imgAfter)  imgs.push({label:'After',  src:imgAfter});
+  if(!imgs.length) return;
+  let idx = slot==='before' ? 0 : (imgBefore ? 1 : 0);
+  idx = Math.min(idx, imgs.length-1);
 
+  const ov = document.createElement('div');
+  ov.id = 'jImgFSOverlay';
+  ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;';
+
+  function renderFS(){
+    var tabs = imgs.map(function(im,i){
+      var active = i===idx;
+      var borderCol = active ? '#f5c842' : 'rgba(255,255,255,0.2)';
+      var bgCol = active ? '#f5c842' : 'transparent';
+      var txtCol = active ? '#000' : '#fff';
+      return '<button onclick="window._jFSGo('+i+')" style="padding:6px 18px;border-radius:20px;border:2px solid '+borderCol+';background:'+bgCol+';color:'+txtCol+';cursor:pointer;font-size:13px;font-weight:600;">'+im.label+'</button>';
+    }).join('');
+    ov.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:14px;">'
+      + '<div style="display:flex;align-items:center;gap:12px;">'
+      + tabs
+      + '<button onclick="document.getElementById('jImgFSOverlay').remove()" style="margin-left:16px;background:rgba(255,255,255,0.15);border:none;color:#fff;cursor:pointer;border-radius:50%;width:34px;height:34px;font-size:18px;">✕</button>'
+      + '</div>'
+      + '<img src="'+imgs[idx].src+'" style="max-width:92vw;max-height:80vh;object-fit:contain;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,0.6);">'
+      + '</div>';
+  }
+  window._jFSGo = function(i){ idx=i; renderFS(); };
+  renderFS();
+  ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
+  document.body.appendChild(ov);
+}
 function clearJImg(slot){
   const key = db.currentAccId+'_'+panelDate;
   if(!key || !panelDate) return;
