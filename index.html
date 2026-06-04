@@ -3199,12 +3199,13 @@ function openJImgFullscreen(slot){
     ov.innerHTML = '<div style="display:flex;flex-direction:column;align-items:center;gap:14px;">'
       + '<div style="display:flex;align-items:center;gap:12px;">'
       + tabs
-      + '<button onclick="document.getElementById('jImgFSOverlay').remove()" style="margin-left:16px;background:rgba(255,255,255,0.15);border:none;color:#fff;cursor:pointer;border-radius:50%;width:34px;height:34px;font-size:18px;">✕</button>'
+      + '<button onclick="window._jFSClose()" style="margin-left:16px;background:rgba(255,255,255,0.15);border:none;color:#fff;cursor:pointer;border-radius:50%;width:34px;height:34px;font-size:18px;">✕</button>'
       + '</div>'
       + '<img src="'+imgs[idx].src+'" style="max-width:92vw;max-height:80vh;object-fit:contain;border-radius:10px;box-shadow:0 8px 40px rgba(0,0,0,0.6);">'
       + '</div>';
   }
   window._jFSGo = function(i){ idx=i; renderFS(); };
+  window._jFSClose = function(){ var el=document.getElementById('jImgFSOverlay'); if(el) el.remove(); };
   renderFS();
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
   document.body.appendChild(ov);
