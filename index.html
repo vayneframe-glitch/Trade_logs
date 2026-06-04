@@ -3144,6 +3144,7 @@ function saveJournal(){
     imgAfter: existing.imgAfter||''
   };
   save();
+  syncToSheets();
   toast('บันทึก Journal แล้ว', 'success');
 }
 
