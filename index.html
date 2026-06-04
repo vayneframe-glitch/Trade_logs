@@ -3210,6 +3210,39 @@ function openJImgFullscreen(slot){
   ov.addEventListener('click', function(e){ if(e.target===ov) ov.remove(); });
   document.body.appendChild(ov);
 }
+function handleJImgFile(input, slot){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const key = db.currentAccId+'_'+panelDate;
+    db.journals[key] = db.journals[key] || {};
+    const field = 'img'+slot.charAt(0).toUpperCase()+slot.slice(1);
+    db.journals[key][field] = e.target.result;
+    setJImgPreview(slot, e.target.result);
+    save();
+    toast('อัปโหลดรูป '+slot+' แล้ว', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleJImgDrop(event, slot){
+  event.preventDefault();
+  const file = event.dataTransfer.files[0];
+  if(!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = function(e){
+    const key = db.currentAccId+'_'+panelDate;
+    db.journals[key] = db.journals[key] || {};
+    const field = 'img'+slot.charAt(0).toUpperCase()+slot.slice(1);
+    db.journals[key][field] = e.target.result;
+    setJImgPreview(slot, e.target.result);
+    save();
+    toast('อัปโหลดรูป '+slot+' แล้ว', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
 function clearJImg(slot){
   const key = db.currentAccId+'_'+panelDate;
   if(!key || !panelDate) return;
