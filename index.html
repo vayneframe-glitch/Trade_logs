@@ -3988,16 +3988,29 @@ async function syncToSheets() {
   if (!currentUser) return;
   setSyncStatus('⬆️ กำลัง sync...', 'var(--gold)');
   try {
-    var value = JSON.stringify(db);
-    // Check if record exists
-    var existing = await supaFetch('trade_data?username=eq.' + encodeURIComponent(currentUser.username) + '&select=username');
-    if (existing && existing.length > 0) {
-      // Update
-      await supaFetch('trade_data?username=eq.' + encodeURIComponent(currentUser.username), 'PATCH', { data: value, updated_at: new Date().toISOString() });
-    } else {
-      // Insert
-      await supaFetch('trade_data', 'POST', { username: currentUser.username, data: value, updated_at: new Date().toISOString() });
+    // Strip base64 images from journals before syncing (keep in localStorage only)
+    var dbCloud = JSON.parse(JSON.stringify(db));
+    if (dbCloud.journals) {
+      Object.keys(dbCloud.journals).forEach(function(k) {
+        if (dbCloud.journals[k]) {
+          dbCloud.journals[k].imgBefore = '';
+          dbCloud.journals[k].imgAfter  = '';
+        }
+      });
     }
+    // Strip base64 images from trades as well
+    if (dbCloud.trades) {
+      dbCloud.trades = dbCloud.trades.map(function(t) {
+        var tr = Object.assign({}, t);
+        if (tr.imgBefore) tr.imgBefore = '';
+        if (tr.imgAfter)  tr.imgAfter  = '';
+        return tr;
+      });
+    }
+    var value = JSON.stringify(dbCloud);
+    // DELETE then INSERT to avoid large old rows causing timeout
+    await supaFetch('trade_data?username=eq.' + encodeURIComponent(currentUser.username), 'DELETE');
+    await supaFetch('trade_data', 'POST', { username: currentUser.username, data: value, updated_at: new Date().toISOString() });
     var t = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
     setSyncStatus('✅ Synced ' + t, 'var(--green)');
     clearUnsaved();
