@@ -229,7 +229,7 @@ function renderCompoundChart() {
     data: {
       labels: labels,
       datasets: [
-        { label: 'เป้าหมาย', data: targetData, borderColor: 'var(--line)', borderDash:[5,4], pointRadius:0, borderWidth:1.5, tension:0.3, fill:false },
+        { label: 'เป้าหมาย', data: targetData, borderColor: '#a78bfa', borderDash:[5,4], pointRadius:0, borderWidth:2, tension:0.3, fill:false },
         { label: 'จริง', data: actualData, borderColor: 'var(--green)', backgroundColor: 'rgba(45,206,120,0.1)', fill:true, pointRadius:4, pointBackgroundColor:'var(--green)', borderWidth:2, tension:0.3, spanGaps:false }
       ]
     },
@@ -1751,7 +1751,7 @@ body.light-mode .modal   { background:#fff; }
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
             <div style="font-size:13px;font-weight:600;color:var(--bright);">Progress Chart</div>
             <div style="display:flex;gap:12px;font-size:11px;color:var(--dim);">
-              <span style="display:flex;align-items:center;gap:4px;"><span style="width:20px;height:2px;background:var(--line);display:inline-block;border-radius:2px;"></span>เป้าหมาย</span>
+              <span style="display:flex;align-items:center;gap:4px;"><span style="width:20px;height:2px;background:#a78bfa;display:inline-block;border-radius:2px;"></span>เป้าหมาย</span>
               <span style="display:flex;align-items:center;gap:4px;"><span style="width:20px;height:2px;background:var(--green);display:inline-block;border-radius:2px;"></span>จริง</span>
             </div>
           </div>
@@ -2089,49 +2089,9 @@ body.light-mode .modal   { background:#fff; }
       <div id="panelTrades"></div>
     </div>
 
-    <!-- Daily Journal -->
+    <!-- 2. Diary Review -->
     <div class="p-section">
-      <h3>📈 Market Analysis</h3>
-      <div class="form-grid" style="margin-bottom:12px;">
-        <div class="fg">
-          <label>HTF Bias</label>
-          <div class="bias-btns">
-            <button class="bias-btn bull" id="j-bull" onclick="selectJBias('bull')">🟢 Bull</button>
-            <button class="bias-btn bear" id="j-bear" onclick="selectJBias('bear')">🔴 Bear</button>
-            <button class="bias-btn neut" id="j-neut" onclick="selectJBias('neut')">⚪ Neutral</button>
-          </div>
-        </div>
-        <div class="fg">
-          <label>Key Timeframe</label>
-          <input type="text" id="j-tf" placeholder="H4, H1, M15...">
-        </div>
-        <div class="fg full">
-          <label>Market Notes</label>
-          <textarea id="j-mkt" placeholder="Key levels, structure, context..."></textarea>
-        </div>
-      </div>
-    </div>
-
-    <div class="p-section">
-      <h3>🧠 Psychology Score</h3>
-      <div style="display:flex;flex-direction:column;gap:14px;">
-        <div class="fg">
-          <label>วินัย (Discipline)</label>
-          <div class="score-row" id="j-disc"></div>
-        </div>
-        <div class="fg">
-          <label>ทำตามแผน (Follow Plan)</label>
-          <div class="score-row" id="j-plan"></div>
-        </div>
-        <div class="fg">
-          <label>บริหารความเสี่ยง (Risk Mgmt)</label>
-          <div class="score-row" id="j-risk"></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="p-section">
-      <h3>📋 Daily Review</h3>
+      <h3>📋 Diary Review</h3>
       <div class="form-grid">
         <div class="fg">
           <label>✅ What went well?</label>
@@ -2145,6 +2105,45 @@ body.light-mode .modal   { background:#fff; }
           <label>🚀 Tomorrow's Plan</label>
           <textarea id="j-plan2" placeholder="Focus, setups to watch..."></textarea>
         </div>
+      </div>
+    </div>
+
+    <!-- 3. Before / After Images (Journal daily) -->
+    <div class="p-section">
+      <h3>📸 Before / After</h3>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <!-- Before -->
+        <div>
+          <label style="font-size:11px;color:var(--dim);margin-bottom:6px;display:block;">📷 Before</label>
+          <div id="j-before-wrap" onclick="document.getElementById('j-before-input').click()"
+            ondrop="handleJImgDrop(event,'before')" ondragover="e=>e.preventDefault()"
+            style="border:2px dashed var(--line);border-radius:10px;min-height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative;background:var(--card);">
+            <img id="j-before-preview" src="" style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;border-radius:8px;">
+            <span id="j-before-placeholder" style="font-size:22px;opacity:0.4;">＋</span>
+            <input type="file" id="j-before-input" accept="image/*" style="display:none" onchange="handleJImgFile(this,'before')">
+          </div>
+          <button onclick="clearJImg('before')" style="margin-top:4px;font-size:10px;color:var(--dim);background:none;border:none;cursor:pointer;width:100%;">✕ ลบรูป</button>
+        </div>
+        <!-- After -->
+        <div>
+          <label style="font-size:11px;color:var(--dim);margin-bottom:6px;display:block;">📸 After</label>
+          <div id="j-after-wrap" onclick="document.getElementById('j-after-input').click()"
+            ondrop="handleJImgDrop(event,'after')" ondragover="e=>e.preventDefault()"
+            style="border:2px dashed var(--line);border-radius:10px;min-height:110px;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;position:relative;background:var(--card);">
+            <img id="j-after-preview" src="" style="display:none;width:100%;height:100%;object-fit:cover;position:absolute;top:0;left:0;border-radius:8px;">
+            <span id="j-after-placeholder" style="font-size:22px;opacity:0.4;">＋</span>
+            <input type="file" id="j-after-input" accept="image/*" style="display:none" onchange="handleJImgFile(this,'after')">
+          </div>
+          <button onclick="clearJImg('after')" style="margin-top:4px;font-size:10px;color:var(--dim);background:none;border:none;cursor:pointer;width:100%;">✕ ลบรูป</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. Note -->
+    <div class="p-section">
+      <h3>📝 Note</h3>
+      <div class="fg">
+        <textarea id="j-note" placeholder="บันทึกเพิ่มเติม..." style="min-height:90px;"></textarea>
       </div>
     </div>
 
@@ -3099,13 +3098,12 @@ function openPanel(dateStr){
 
   // Load journal
   const j = db.journals[db.currentAccId+'_'+dateStr] || {};
-  document.getElementById('j-tf').value = j.tf||'';
-  document.getElementById('j-mkt').value = j.mkt||'';
   document.getElementById('j-good').value = j.good||'';
   document.getElementById('j-bad').value = j.bad||'';
   document.getElementById('j-plan2').value = j.plan||'';
-  selectJBias(j.bias||'');
-  buildScores([{id:'j-disc',val:j.disc||0},{id:'j-plan',val:j.plan_score||0},{id:'j-risk',val:j.risk||0}]);
+  document.getElementById('j-note').value = j.note||'';
+  setJImgPreview('before', j.imgBefore||'');
+  setJImgPreview('after', j.imgAfter||'');
 
   document.getElementById('panelOverlay').classList.add('show');
   document.getElementById('dayPanel').classList.add('show');
@@ -3114,6 +3112,10 @@ function openPanel(dateStr){
 function closePanel(){
   document.getElementById('panelOverlay').classList.remove('show');
   document.getElementById('dayPanel').classList.remove('show');
+  setJImgPreview('before','');
+  setJImgPreview('after','');
+  document.getElementById('j-before-input').value='';
+  document.getElementById('j-after-input').value='';
 }
 
 function selectJBias(b){
@@ -3126,20 +3128,73 @@ function selectJBias(b){
 
 function saveJournal(){
   const key = db.currentAccId+'_'+panelDate;
+  const existing = db.journals[key] || {};
   db.journals[key] = {
-    bias: selectedJBias,
-    tf: document.getElementById('j-tf').value,
-    mkt: document.getElementById('j-mkt').value,
     good: document.getElementById('j-good').value,
     bad: document.getElementById('j-bad').value,
     plan: document.getElementById('j-plan2').value,
-    disc: getScore('j-disc'),
-    plan_score: getScore('j-plan'),
-    risk: getScore('j-risk')
+    note: document.getElementById('j-note').value,
+    imgBefore: existing.imgBefore||'',
+    imgAfter: existing.imgAfter||''
   };
   save();
   toast('บันทึก Journal แล้ว', 'success');
-  syncToSheets();
+}
+
+function setJImgPreview(slot, src){
+  const preview = document.getElementById('j-'+slot+'-preview');
+  const placeholder = document.getElementById('j-'+slot+'-placeholder');
+  if(src){
+    preview.src = src;
+    preview.style.display = 'block';
+    placeholder.style.display = 'none';
+  } else {
+    preview.src = '';
+    preview.style.display = 'none';
+    placeholder.style.display = 'block';
+  }
+}
+
+function handleJImgFile(input, slot){
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const key = db.currentAccId+'_'+panelDate;
+    db.journals[key] = db.journals[key] || {};
+    db.journals[key]['img'+slot.charAt(0).toUpperCase()+slot.slice(1)] = e.target.result;
+    setJImgPreview(slot, e.target.result);
+    save();
+    toast('อัปโหลดรูป '+slot+' แล้ว', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleJImgDrop(event, slot){
+  event.preventDefault();
+  const file = event.dataTransfer.files[0];
+  if(!file || !file.type.startsWith('image/')) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const key = db.currentAccId+'_'+panelDate;
+    db.journals[key] = db.journals[key] || {};
+    db.journals[key]['img'+slot.charAt(0).toUpperCase()+slot.slice(1)] = e.target.result;
+    setJImgPreview(slot, e.target.result);
+    save();
+    toast('อัปโหลดรูป '+slot+' แล้ว', 'success');
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearJImg(slot){
+  const key = db.currentAccId+'_'+panelDate;
+  if(!key || !panelDate) return;
+  db.journals[key] = db.journals[key] || {};
+  db.journals[key]['img'+slot.charAt(0).toUpperCase()+slot.slice(1)] = '';
+  document.getElementById('j-'+slot+'-input').value = '';
+  setJImgPreview(slot, '');
+  save();
+  toast('ลบรูป '+slot+' แล้ว', 'success');
 }
 
 // ═══════════════════════════════════════════
@@ -3671,7 +3726,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   // Build score pips for trade modal
   buildScorePips('conf-score');
   // Build score pips for journal panel
-  buildScores([{id:'j-disc',val:0},{id:'j-plan',val:0},{id:'j-risk',val:0}]);
+  // j-disc / j-plan / j-risk removed (no longer in journal panel)
   initChips();
   refreshAll();
   initCompound(); // ต้องเรียกหลัง db พร้อมแล้ว
