@@ -726,23 +726,29 @@ body::before {
   .bottom-nav {
     display:flex !important;
     position:fixed; bottom:0; left:0; right:0;
-    background:var(--ink2); border-top:1px solid var(--line);
-    z-index:500; padding:6px 0 max(6px, env(safe-area-inset-bottom));
+    background:var(--ink2); border-top:none;
+    z-index:500; padding:8px 4px max(10px, env(safe-area-inset-bottom));
+    align-items:center;
   }
   .bottom-nav-btn {
-    flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
-    background:none; border:none; color:var(--dim); cursor:pointer;
-    font-family:'Sora',sans-serif; font-size:10px; font-weight:600;
-    padding:6px 4px; transition:color 0.15s;
+    flex:1; display:flex; flex-direction:column; align-items:center; gap:5px;
+    background:none; border:none; color:rgba(255,255,255,0.28); cursor:pointer;
+    padding:4px 2px; transition:color 0.15s;
   }
-  .bottom-nav-btn .bni { font-size:20px; line-height:1; }
+  .bottom-nav-btn .bni { font-size:22px; line-height:1; }
   .bottom-nav-btn.active { color:var(--gold); }
+  .bottom-nav-btn .bnav-dot { width:4px; height:4px; border-radius:50%; background:transparent; }
+  .bottom-nav-btn.active .bnav-dot { background:var(--gold); }
   .bottom-nav-btn.add-btn {
-    color:var(--ink);
-    background:var(--gold); border-radius:14px;
-    margin:-10px 8px 0; padding:10px 16px;
-    box-shadow:0 4px 16px rgba(245,200,66,0.35);
+    flex:1; display:flex; justify-content:center; align-items:center;
+    background:none; border:none; cursor:pointer; padding:0;
   }
+  .bottom-nav-btn.add-btn .add-circle {
+    width:48px; height:48px; border-radius:50%; background:var(--gold);
+    display:flex; align-items:center; justify-content:center;
+    margin-top:-10px;
+  }
+  .bottom-nav-btn.add-btn .add-circle .bni { font-size:24px; color:var(--ink); line-height:1; }
 
   /* Main — prevent overflow */
   .main { padding-bottom:72px; overflow-x:hidden; width:100%; }
@@ -752,6 +758,7 @@ body::before {
   .topbar { padding:10px 14px; }
   .page-title { font-size:15px; }
   .topbar-actions .btn-ghost { display:none; }
+  .topbar-actions .btn-ghost[onclick*='openFundModal'] { display:inline-flex !important; }
   .topbar-actions .btn-gold { display:none; }
 
   /* Content — fix left cut */
@@ -2162,25 +2169,25 @@ body.light-mode .modal   { background:#fff; }
 <!-- ══ BOTTOM NAV (mobile only) ══ -->
 <nav class="bottom-nav" style="display:none;">
   <button class="bottom-nav-btn active" id="bnav-dashboard" onclick="switchPage('dashboard');setActiveBottomNav('dashboard')">
-    <span class="bni">🗓</span><span>Dashboard</span>
+    <span class="bni" style="font-size:20px;">⊞</span><div class="bnav-dot"></div>
   </button>
   <button class="bottom-nav-btn" id="bnav-trades" onclick="switchPage('trades');setActiveBottomNav('trades')">
-    <span class="bni">📋</span><span>Trades</span>
-  </button>
-  <button class="bottom-nav-btn add-btn" onclick="openAddTrade()">
-    <span class="bni">＋</span><span>Add</span>
+    <span class="bni">≡</span><div class="bnav-dot"></div>
   </button>
   <button class="bottom-nav-btn" id="bnav-journal" onclick="switchPage('journal');setActiveBottomNav('journal')">
-    <span class="bni">📓</span><span>Journal</span>
+    <span class="bni">📓</span><div class="bnav-dot"></div>
+  </button>
+  <button class="bottom-nav-btn add-btn" onclick="openAddTrade()">
+    <div class="add-circle"><span class="bni">＋</span></div>
   </button>
   <button class="bottom-nav-btn" id="bnav-stats" onclick="switchPage('stats');setActiveBottomNav('stats')">
-    <span class="bni">📊</span><span>Stats</span>
+    <span class="bni">📊</span><div class="bnav-dot"></div>
   </button>
   <button class="bottom-nav-btn" id="bnav-playbook" onclick="switchPage('playbook');setActiveBottomNav('playbook')">
-    <span class="bni">📖</span><span>Playbook</span>
+    <span class="bni">📖</span><div class="bnav-dot"></div>
   </button>
-  <button class="bottom-nav-btn" id="bnav-menu" onclick="openAccountModal()">
-    <span class="bni">⚙</span><span>Account</span>
+  <button class="bottom-nav-btn" id="bnav-compound" onclick="switchPage('compound');setActiveBottomNav('compound')">
+    <span class="bni">📈</span><div class="bnav-dot"></div>
   </button>
 </nav>
 
@@ -3336,7 +3343,7 @@ function getScore(id){
 // BOTTOM NAV
 // ═══════════════════════════════════════════
 function setActiveBottomNav(page){
-  ['dashboard','trades','stats'].forEach(p=>{
+  ['dashboard','trades','journal','stats','playbook','compound'].forEach(p=>{
     const el = document.getElementById('bnav-'+p);
     if(el) el.classList.toggle('active', p===page);
   });
