@@ -545,7 +545,7 @@ body::before {
 }
 .modal-close:hover { color:var(--text); border-color:var(--dim); }
 .modal-body { padding:0 28px 28px; }
-  #detailBody { padding:0 !important; overflow-y:auto; max-height:80vh; }
+  #detailBody { padding:0 !important; overflow-y:hidden; max-height:90vh; }
 
 /* ── Form ── */
 .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
@@ -3767,13 +3767,13 @@ function showTradeDetail(id){
     ` + actBtns;
   } else {
     document.getElementById('detailBody').innerHTML = header + `
-      <div style="display:grid;grid-template-columns:1.1fr 1fr;min-height:420px;">
-        <div style="padding:20px;border-right:1px solid var(--line);">
+      <div style="display:grid;grid-template-columns:1.1fr 1fr;height:560px;">
+        <div style="padding:20px;border-right:1px solid var(--line);overflow-y:auto;height:100%;">
           ${imgLeft}
           <div style="height:1px;background:var(--line);margin:14px 0;"></div>
           ${tagsSection}
         </div>
-        <div style="padding:20px;overflow-y:auto;max-height:520px;">
+        <div style="padding:20px;overflow-y:auto;height:100%;">
           <div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Trade Info</div>
           ${fieldsSection}
           <div style="height:1px;background:var(--line);margin:14px 0;"></div>
