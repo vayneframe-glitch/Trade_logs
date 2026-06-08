@@ -3970,9 +3970,32 @@ async function doLogin() {
       document.getElementById('loginScreen').classList.add('hidden');
       document.getElementById('sideUsername').textContent = '👤 ' + user.username;
       if (user.role === 'admin') document.getElementById('adminBtn').style.display = 'block';
+      // Preserve local images before reset
+      var _prevDb = JSON.parse(Store.get('tradelog') || '{}');
+      var _localImgMap = {};
+      (_prevDb.trades||[]).forEach(function(tr){ _localImgMap[tr.id] = {imgBefore:tr.imgBefore||'',imgAfter:tr.imgAfter||''}; });
+      var _localJournals = _prevDb.journals || {};
+
       db = { accounts:[{id:'default',name:'Main Account',balance:10000,initial:10000}], currentAccId:'default', trades:[], journals:{} };
       save(); refreshAll();
       await syncFromSheets(true);
+
+      // Restore images after cloud load
+      (db.trades||[]).forEach(function(tr){
+        if(_localImgMap[tr.id]){
+          tr.imgBefore = tr.imgBefore || _localImgMap[tr.id].imgBefore;
+          tr.imgAfter  = tr.imgAfter  || _localImgMap[tr.id].imgAfter;
+        }
+      });
+      db.journals = db.journals || {};
+      Object.keys(_localJournals).forEach(function(k){
+        if(!db.journals[k]) db.journals[k] = _localJournals[k];
+        else {
+          db.journals[k].imgBefore = db.journals[k].imgBefore || _localJournals[k].imgBefore || '';
+          db.journals[k].imgAfter  = db.journals[k].imgAfter  || _localJournals[k].imgAfter  || '';
+        }
+      });
+      save(); refreshAll();
       await syncToSheets();
       if (window._autoSyncTimer) clearInterval(window._autoSyncTimer);
       window._autoSyncTimer = setInterval(syncToSheets, 5 * 60 * 1000);
