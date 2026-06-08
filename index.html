@@ -4045,26 +4045,7 @@ async function syncToSheets() {
   if (!currentUser) return;
   setSyncStatus('⬆️ กำลัง sync...', 'var(--gold)');
   try {
-    // Strip base64 images from journals before syncing (keep in localStorage only)
-    var dbCloud = JSON.parse(JSON.stringify(db));
-    if (dbCloud.journals) {
-      Object.keys(dbCloud.journals).forEach(function(k) {
-        if (dbCloud.journals[k]) {
-          dbCloud.journals[k].imgBefore = '';
-          dbCloud.journals[k].imgAfter  = '';
-        }
-      });
-    }
-    // Strip base64 images from trades as well
-    if (dbCloud.trades) {
-      dbCloud.trades = dbCloud.trades.map(function(t) {
-        var tr = Object.assign({}, t);
-        if (tr.imgBefore) tr.imgBefore = '';
-        if (tr.imgAfter)  tr.imgAfter  = '';
-        return tr;
-      });
-    }
-    var value = JSON.stringify(dbCloud);
+    var value = JSON.stringify(db);
     // DELETE then INSERT to avoid large old rows causing timeout
     await supaFetch('trade_data?username=eq.' + encodeURIComponent(currentUser.username), 'DELETE');
     await supaFetch('trade_data', 'POST', { username: currentUser.username, data: value, updated_at: new Date().toISOString() });
