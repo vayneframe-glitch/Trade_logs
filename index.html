@@ -586,6 +586,8 @@ body::before {
 .chip.on { background:rgba(245,200,66,0.12); border-color:var(--gold); color:var(--gold); }
 .chip.on-green { background:rgba(45,206,120,0.12); border-color:var(--green); color:var(--green); }
 .chip.on-red { background:rgba(255,77,106,0.12); border-color:var(--red); color:var(--red); }
+.add-tag-btn { margin-top:6px; background:none; border:1px dashed var(--dim); color:var(--dim); border-radius:20px; padding:4px 12px; font-size:11px; cursor:pointer; transition:all .15s; }
+.add-tag-btn:hover { border-color:var(--gold); color:var(--gold); }
 /* session chips get color applied via JS */
 
 /* Score slider */
@@ -1912,6 +1914,7 @@ body.light-mode .modal   { background:#fff; }
         <div id="setup-tags-wrap" style="display:none;">
           <label style="font-size:11px;color:var(--dim);margin-bottom:6px;display:block;">เลือก Setup Tags (เลือกได้หลายอัน)</label>
           <div class="chip-group" id="struct-tags"></div>
+          <button type="button" class="add-tag-btn" onclick="openAddTagModal('struct')">+ เพิ่ม</button>
         </div>
         <input type="hidden" id="t-setup" value="">
       </div>
@@ -1925,6 +1928,7 @@ body.light-mode .modal   { background:#fff; }
           <div class="chip session-chip" data-val="New York" style="--sc:#34d399;">🗽 New York</div>
           <div class="chip session-chip" data-val="NEWS" style="--sc:#f87171;">📰 NEWS</div>
         </div>
+        <button type="button" class="add-tag-btn" onclick="openAddTagModal('session')">+ เพิ่ม</button>
       </div>
 
       <!-- Wyckoff Tags -->
@@ -1948,6 +1952,7 @@ body.light-mode .modal   { background:#fff; }
           <div class="chip" data-val="Phase D">Phase D</div>
           <div class="chip" data-val="Phase E">Phase E</div>
         </div>
+        <button type="button" class="add-tag-btn" onclick="openAddTagModal('wyckoff')">+ เพิ่ม</button>
       </div>
 
       <!-- Fibonacci Tags -->
@@ -1964,6 +1969,7 @@ body.light-mode .modal   { background:#fff; }
           <div class="chip" data-val="Ext 161.8%">Ext 161.8%</div>
           <div class="chip" data-val="Ext 261.8%">Ext 261.8%</div>
         </div>
+        <button type="button" class="add-tag-btn" onclick="openAddTagModal('fibo')">+ เพิ่ม</button>
       </div>
 
       <!-- Analysis Text -->
@@ -2017,6 +2023,7 @@ body.light-mode .modal   { background:#fff; }
           <div class="chip" data-val="Impatient">⚡ Impatient</div>
           <div class="chip" data-val="Disciplined">✅ Disciplined</div>
         </div>
+        <button type="button" class="add-tag-btn" onclick="openAddTagModal('emo')">+ เพิ่ม</button>
       </div>
 
       <div class="divider"></div>
@@ -3347,6 +3354,97 @@ function setActiveBottomNav(page){
 }
 
 // ═══════════════════════════════════════════
+// CUSTOM TAGS
+// ═══════════════════════════════════════════
+var _addTagGroup = '';
+var _tagGroupMap = {
+  struct:  { id:'struct-tags',  key:'structCustom',  label:'Setup Tags',  cls:'chip' },
+  wyckoff: { id:'wyckoff-tags', key:'wyckoffCustom', label:'Wyckoff',     cls:'chip' },
+  fibo:    { id:'fibo-tags',    key:'fiboCustom',    label:'Fibonacci',   cls:'chip' },
+  emo:     { id:'emo-tags',     key:'emoCustom',     label:'Emotion',     cls:'chip' },
+  session: { id:'session-tags', key:'sessionCustom', label:'Session',     cls:'chip session-chip' }
+};
+
+function openAddTagModal(group){
+  _addTagGroup = group;
+  var cfg = _tagGroupMap[group];
+  document.getElementById('addTagTitle').textContent = 'เพิ่ม Tag — ' + cfg.label;
+  document.getElementById('addTagInput').value = '';
+  // Show existing custom tags for this group
+  var customs = (db.customTags && db.customTags[cfg.key]) || [];
+  var listEl = document.getElementById('customTagList');
+  listEl.innerHTML = customs.length ? '<div style="font-size:11px;color:var(--dim);width:100%;margin-bottom:4px;">Tags ที่เพิ่มไว้:</div>' : '';
+  customs.forEach(function(tag){
+    var span = document.createElement('span');
+    span.style.cssText = 'background:var(--ink3);border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;color:var(--dim);display:flex;align-items:center;gap:4px;';
+    span.innerHTML = tag + ' <span onclick="removeCustomTag(''+group+'',''+tag+'',this.parentNode)" style="color:var(--red);font-size:13px;line-height:1;">×</span>';
+    listEl.appendChild(span);
+  });
+  document.getElementById('addTagOverlay').style.display = 'flex';
+  setTimeout(function(){ document.getElementById('addTagInput').focus(); }, 100);
+}
+
+function closeAddTagModal(){
+  document.getElementById('addTagOverlay').style.display = 'none';
+}
+
+function confirmAddTag(){
+  var val = document.getElementById('addTagInput').value.trim();
+  if(!val) return;
+  var cfg = _tagGroupMap[_addTagGroup];
+  db.customTags = db.customTags || {};
+  db.customTags[cfg.key] = db.customTags[cfg.key] || [];
+  if(db.customTags[cfg.key].includes(val)){ toast('Tag นี้มีอยู่แล้ว','warning'); return; }
+  db.customTags[cfg.key].push(val);
+  // Add chip to DOM
+  addCustomChipToDOM(_addTagGroup, val);
+  document.getElementById('addTagInput').value = '';
+  save(); syncToSheets();
+  toast('เพิ่ม tag "'+val+'" แล้ว','success');
+  // Refresh list
+  openAddTagModal(_addTagGroup);
+}
+
+function addCustomChipToDOM(group, val){
+  var cfg = _tagGroupMap[group];
+  var wrap = document.getElementById(cfg.id);
+  if(!wrap) return;
+  // Check not duplicate
+  var existing = Array.from(wrap.querySelectorAll('.chip')).find(function(c){ return c.dataset.val===val; });
+  if(existing) return;
+  var chip = document.createElement('div');
+  chip.className = cfg.cls;
+  chip.dataset.val = val;
+  chip.textContent = val;
+  chip.addEventListener('click', function(){ this.classList.toggle('on'); });
+  wrap.appendChild(chip);
+}
+
+function removeCustomTag(group, val, el){
+  var cfg = _tagGroupMap[group];
+  db.customTags = db.customTags || {};
+  db.customTags[cfg.key] = (db.customTags[cfg.key]||[]).filter(function(t){ return t!==val; });
+  // Remove chip from DOM
+  var wrap = document.getElementById(cfg.id);
+  if(wrap){
+    var chip = Array.from(wrap.querySelectorAll('.chip')).find(function(c){ return c.dataset.val===val; });
+    if(chip) chip.remove();
+  }
+  save(); syncToSheets();
+  toast('ลบ tag "'+val+'" แล้ว','success');
+  if(el && el.parentNode) el.parentNode.remove();
+}
+
+function loadCustomTagsToDOM(){
+  if(!db.customTags) return;
+  Object.keys(_tagGroupMap).forEach(function(group){
+    var cfg = _tagGroupMap[group];
+    var customs = db.customTags[cfg.key] || [];
+    customs.forEach(function(val){ addCustomChipToDOM(group, val); });
+  });
+}
+
+// ═══════════════════════════════════════════
 // RISK CALCULATOR
 // ═══════════════════════════════════════════
 function calcRisk(){
@@ -3822,6 +3920,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   initChips();
   refreshAll();
   initCompound(); // ต้องเรียกหลัง db พร้อมแล้ว
+  loadCustomTagsToDOM(); // โหลด custom tags
 
   // Redraw charts on resize
   window.addEventListener('resize', ()=>{
@@ -4092,6 +4191,7 @@ async function syncFromSheets(silent) {
 
           db = remote; save(); refreshAll();
           initCompound();
+          loadCustomTagsToDOM();
           var t = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
           if (!silent) setSyncStatus('✅ โหลดแล้ว ' + t, 'var(--green)');
         } else { setSyncStatus('ยกเลิก', 'var(--dim)'); }
@@ -5294,6 +5394,22 @@ function deleteFund(id) {
         <div style="font-size:11px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;margin-bottom:10px;">ประวัติฝาก/ถอน</div>
         <div id="fundHistoryList"></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add Custom Tag Modal -->
+<div class="overlay" id="addTagOverlay" style="display:none;align-items:center;justify-content:center;">
+  <div class="modal" style="max-width:340px;">
+    <div class="modal-head">
+      <h2 id="addTagTitle">เพิ่ม Tag</h2>
+      <button class="modal-close" onclick="closeAddTagModal()">✕</button>
+    </div>
+    <div style="padding:20px;">
+      <input type="text" id="addTagInput" placeholder="ชื่อ tag..." style="width:100%;padding:10px 12px;border-radius:8px;border:1px solid var(--line);background:var(--ink3);color:var(--text);font-size:14px;outline:none;"
+        onkeydown="if(event.key==='Enter') confirmAddTag()">
+      <div id="customTagList" style="margin-top:14px;display:flex;flex-wrap:wrap;gap:6px;"></div>
+      <button class="btn btn-gold" style="width:100%;margin-top:16px;" onclick="confirmAddTag()">+ เพิ่ม Tag</button>
     </div>
   </div>
 </div>
