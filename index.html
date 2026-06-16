@@ -3377,13 +3377,14 @@ function openAddTagModal(group){
   customs.forEach(function(tag){
     var span = document.createElement('span');
     span.style.cssText = 'background:var(--ink3);border:1px solid var(--line);border-radius:20px;padding:3px 10px;font-size:11px;cursor:pointer;color:var(--dim);display:flex;align-items:center;gap:4px;';
-    span.innerHTML = tag + ' <span onclick="removeCustomTag(''+group+'',''+tag+'',this.parentNode)" style="color:var(--red);font-size:13px;line-height:1;">×</span>';
+    span.innerHTML = tag + ' <span onclick="window._rmTag(\''+group+'\',\''+tag+'\',this.parentNode)" style="color:var(--red);font-size:13px;line-height:1;">×</span>'
     listEl.appendChild(span);
   });
   document.getElementById('addTagOverlay').style.display = 'flex';
   setTimeout(function(){ document.getElementById('addTagInput').focus(); }, 100);
 }
 
+window._rmTag = function(group, val, el){ removeCustomTag(group, val, el); };
 function closeAddTagModal(){
   document.getElementById('addTagOverlay').style.display = 'none';
 }
