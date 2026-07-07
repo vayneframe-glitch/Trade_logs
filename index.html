@@ -3227,13 +3227,15 @@ function handleJImgFile(input, slot){
   if(!file) return;
   const reader = new FileReader();
   reader.onload = function(e){
-    const key = db.currentAccId+'_'+panelDate;
-    db.journals[key] = db.journals[key] || {};
-    const field = 'img'+slot.charAt(0).toUpperCase()+slot.slice(1);
-    db.journals[key][field] = e.target.result;
-    setJImgPreview(slot, e.target.result);
-    save();
-    toast('อัปโหลดรูป '+slot+' แล้ว', 'success');
+    compressImage(e.target.result, 1200, 900, 0.7, function(compressed){
+      const key = db.currentAccId+'_'+panelDate;
+      db.journals[key] = db.journals[key] || {};
+      const field = 'img'+slot.charAt(0).toUpperCase()+slot.slice(1);
+      db.journals[key][field] = compressed;
+      setJImgPreview(slot, compressed);
+      save();
+      toast('อัปโหลดรูป '+slot+' แล้ว', 'success');
+    });
   };
   reader.readAsDataURL(file);
 }
@@ -3495,10 +3497,24 @@ function showTomorrowPlan(){
 }
 let imgData = {before: null, after: null};
 
+function compressImage(dataUrl, maxW, maxH, quality, cb){
+  var img = new Image();
+  img.onload = function(){
+    var w = img.width, h = img.height;
+    if(w > maxW){ h = Math.round(h * maxW / w); w = maxW; }
+    if(h > maxH){ w = Math.round(w * maxH / h); h = maxH; }
+    var canvas = document.createElement('canvas');
+    canvas.width = w; canvas.height = h;
+    canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+    cb(canvas.toDataURL('image/jpeg', quality));
+  };
+  img.src = dataUrl;
+}
+
 function handleImgFile(input, slot){
   const file = input.files[0]; if(!file) return;
   const r = new FileReader();
-  r.onload = e => setImgPreview(slot, e.target.result);
+  r.onload = e => compressImage(e.target.result, 1200, 900, 0.7, function(compressed){ setImgPreview(slot, compressed); });
   r.readAsDataURL(file);
 }
 function handleImgDrop(e, slot){
@@ -3507,7 +3523,7 @@ function handleImgDrop(e, slot){
   const file = e.dataTransfer.files[0];
   if(!file||!file.type.startsWith('image/')) return;
   const r = new FileReader();
-  r.onload = ev => setImgPreview(slot, ev.target.result);
+  r.onload = ev => compressImage(ev.target.result, 1200, 900, 0.7, function(compressed){ setImgPreview(slot, compressed); });
   r.readAsDataURL(file);
 }
 function setImgPreview(slot, src){
@@ -3943,8 +3959,8 @@ document.addEventListener('DOMContentLoaded',()=>{
 // ═══════════════════════════════════════════
 // SUPABASE CONFIG
 // ═══════════════════════════════════════════
-const SUPA_URL = 'https://xfuxfmqjnhpgdclypumk.supabase.co';
-const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhmdXhmbXFqbmhwZ2RjbHlwdW1rIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg2OTYzMzEsImV4cCI6MjA5NDI3MjMzMX0.-62sNHu5Wftr4Hz6O8QcP1jTL0T8CpdPxWZs8GHnjWw';
+const SUPA_URL = 'https://xytaqxwdvnkskwpyrzom.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh5dGFxeHdkdm5rc2t3cHlyem9tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM0MDU5ODIsImV4cCI6MjA5ODk4MTk4Mn0.Lx7-5Qw9CDoTrN1-OdQiJYme7i5qzXIg-VBwyKFtArM';
 
 // ─── Supabase REST helper ───────────────────
 async function supaFetch(path, method, body) {
