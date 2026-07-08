@@ -3227,12 +3227,19 @@ function handleJImgFile(input, slot){
   if(!file) return;
   const reader = new FileReader();
   reader.onload = function(e){
-    compressImage(e.target.result, 1200, 900, 0.7, function(compressed){
+    compressImage(e.target.result, 1200, 900, 0.7, async function(compressed){
       const key = db.currentAccId+'_'+panelDate;
       db.journals[key] = db.journals[key] || {};
       const field = 'img'+slot.charAt(0).toUpperCase()+slot.slice(1);
-      db.journals[key][field] = compressed;
       setJImgPreview(slot, compressed);
+      try {
+        var fname = (currentUser?currentUser.username:'anon')+'-j-'+panelDate+'-'+slot+'.jpg';
+        var url = await uploadImgToStorage(compressed, fname);
+        db.journals[key][field] = url;
+      } catch(err){
+        db.journals[key][field] = compressed;
+        console.warn('Storage upload failed, using base64:', err);
+      }
       save();
       toast('อัปโหลดรูป '+slot+' แล้ว', 'success');
     });
@@ -3246,13 +3253,22 @@ function handleJImgDrop(event, slot){
   if(!file || !file.type.startsWith('image/')) return;
   const reader = new FileReader();
   reader.onload = function(e){
-    const key = db.currentAccId+'_'+panelDate;
-    db.journals[key] = db.journals[key] || {};
-    const field = 'img'+slot.charAt(0).toUpperCase()+slot.slice(1);
-    db.journals[key][field] = e.target.result;
-    setJImgPreview(slot, e.target.result);
-    save();
-    toast('อัปโหลดรูป '+slot+' แล้ว', 'success');
+    compressImage(e.target.result, 1200, 900, 0.7, async function(compressed){
+      const key = db.currentAccId+'_'+panelDate;
+      db.journals[key] = db.journals[key] || {};
+      const field = 'img'+slot.charAt(0).toUpperCase()+slot.slice(1);
+      setJImgPreview(slot, compressed);
+      try {
+        var fname = (currentUser?currentUser.username:'anon')+'-j-'+panelDate+'-'+slot+'.jpg';
+        var url = await uploadImgToStorage(compressed, fname);
+        db.journals[key][field] = url;
+      } catch(err){
+        db.journals[key][field] = compressed;
+        console.warn('Storage upload failed, using base64:', err);
+      }
+      save();
+      toast('อัปโหลดรูป '+slot+' แล้ว', 'success');
+    });
   };
   reader.readAsDataURL(file);
 }
@@ -3511,10 +3527,35 @@ function compressImage(dataUrl, maxW, maxH, quality, cb){
   img.src = dataUrl;
 }
 
+async function uploadImgToStorage(dataUrl, filename){
+  // Convert base64 to blob
+  var arr = dataUrl.split(','), mime = arr[0].match(/:(.*?);/)[1];
+  var bstr = atob(arr[1]), n = bstr.length, u8 = new Uint8Array(n);
+  for(var i=0;i<n;i++) u8[i]=bstr.charCodeAt(i);
+  var blob = new Blob([u8], {type: mime});
+
+  // Upload to Supabase Storage
+  var res = await fetch(SUPA_URL+'/storage/v1/object/trade-images/'+filename, {
+    method: 'POST',
+    headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer '+SUPA_KEY, 'Content-Type': mime, 'x-upsert': 'true' },
+    body: blob
+  });
+  if(!res.ok){ var err = await res.text(); throw new Error('Upload failed: '+err); }
+  // Return public URL
+  return SUPA_URL+'/storage/v1/object/public/trade-images/'+filename;
+}
+
 function handleImgFile(input, slot){
   const file = input.files[0]; if(!file) return;
   const r = new FileReader();
-  r.onload = e => compressImage(e.target.result, 1200, 900, 0.7, function(compressed){ setImgPreview(slot, compressed); });
+  r.onload = e => compressImage(e.target.result, 1200, 900, 0.7, async function(compressed){
+    setImgPreview(slot, compressed); // show preview immediately
+    try {
+      var fname = (currentUser?currentUser.username:'anon')+'-'+Date.now()+'-'+slot+'.jpg';
+      var url = await uploadImgToStorage(compressed, fname);
+      imgData[slot] = url; // replace base64 with URL
+    } catch(err){ console.warn('Storage upload failed, using base64:', err); }
+  });
   r.readAsDataURL(file);
 }
 function handleImgDrop(e, slot){
@@ -3523,7 +3564,14 @@ function handleImgDrop(e, slot){
   const file = e.dataTransfer.files[0];
   if(!file||!file.type.startsWith('image/')) return;
   const r = new FileReader();
-  r.onload = ev => compressImage(ev.target.result, 1200, 900, 0.7, function(compressed){ setImgPreview(slot, compressed); });
+  r.onload = ev => compressImage(ev.target.result, 1200, 900, 0.7, async function(compressed){
+    setImgPreview(slot, compressed);
+    try {
+      var fname = (currentUser?currentUser.username:'anon')+'-'+Date.now()+'-'+slot+'.jpg';
+      var url = await uploadImgToStorage(compressed, fname);
+      imgData[slot] = url;
+    } catch(err){ console.warn('Storage upload failed, using base64:', err); }
+  });
   r.readAsDataURL(file);
 }
 function setImgPreview(slot, src){
