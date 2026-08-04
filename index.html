@@ -4086,8 +4086,6 @@ async function doRegister() {
       // sync ขึ้น Sheets ทันทีหลังสมัคร
       await syncToSheets();
       setSyncStatus('✅ สมัครและเข้าสู่ระบบแล้ว', 'var(--green)');
-      if (window._autoSyncTimer) clearInterval(window._autoSyncTimer);
-      window._autoSyncTimer = setInterval(syncToSheets, 5 * 60 * 1000);
     } else {
       showLoginErr(json.error || 'สมัครไม่สำเร็จ');
     }
@@ -4161,8 +4159,6 @@ async function doLogin() {
       });
       save(); refreshAll();
       await syncToSheets();
-      if (window._autoSyncTimer) clearInterval(window._autoSyncTimer);
-      window._autoSyncTimer = setInterval(syncToSheets, 5 * 60 * 1000);
     } else {
       showLoginErr('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง');
     }
