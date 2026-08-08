@@ -882,12 +882,7 @@ body::before {
 }
 
 /* ── Login Screen ── */
-.login-screen {
-  position:fixed; inset:0; background:var(--ink);
-  display:flex; align-items:center; justify-content:center;
-  z-index:9000; flex-direction:column; gap:0;
-}
-.login-screen.hidden { display:none; }
+.login-screen, .login-screen.hidden { display:none !important; }
 .login-box {
   background:var(--ink2); border:1px solid var(--line);
   border-radius:20px; padding:40px; width:100%; max-width:380px;
@@ -1379,21 +1374,16 @@ body.light-mode .modal   { background:#fff; }
       <div class="account-box" onclick="openAccountModal()" style="cursor:pointer;">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
           <div style="font-size:10px;color:var(--dim);text-transform:uppercase;letter-spacing:1px;font-family:'DM Mono',monospace;">Account</div>
-          <button onclick="event.stopPropagation();openAdminPanel()" id="adminBtn" style="display:none;font-size:10px;background:rgba(245,200,66,0.1);border:1px solid rgba(245,200,66,0.3);color:var(--gold);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:'DM Mono',monospace;">⚙ Admin</button>
+
         </div>
-        <div style="font-size:10px;color:var(--dim);font-family:'DM Mono',monospace;margin-bottom:2px;" id="sideUsername">—</div>
+        <div style="display:none;" id="sideUsername"></div>
         <div class="account-name" id="sideAccName">Main</div>
         <div class="account-balance" id="sideAccBalance">$0</div>
         <div class="account-change" id="sideAccChange"></div>
       </div>
 
       <!-- User actions -->
-      <button class="nav-btn" onclick="openChangePass()" style="margin-top:6px;">
-        <span class="icon">🔑</span><span class="nav-text">เปลี่ยนรหัสผ่าน</span>
-      </button>
-      <button class="nav-btn" onclick="doLogout()" style="margin-top:4px;color:var(--red);">
-        <span class="icon">🚪</span><span class="nav-text">ออกจากระบบ</span>
-      </button>
+
 
     </div>
   </aside>
@@ -2257,7 +2247,7 @@ body.light-mode .modal   { background:#fff; }
 // ═══════════════════════════════════════════
 // SAVE
 // ═══════════════════════════════════════════
-function save(){ Store.set('tradelog', JSON.stringify(db)); if(typeof markUnsaved==='function' && typeof currentUser!=='undefined' && currentUser) markUnsaved(); }
+function save(){ Store.set('tradelog', JSON.stringify(db)); if(typeof markUnsaved==='function') markUnsaved(); }
 
 // ═══════════════════════════════════════════
 // PAGE SWITCHING
@@ -3233,7 +3223,7 @@ function handleJImgFile(input, slot){
       const field = 'img'+slot.charAt(0).toUpperCase()+slot.slice(1);
       setJImgPreview(slot, compressed);
       try {
-        var fname = (currentUser?currentUser.username:'anon')+'-j-'+panelDate+'-'+slot+'.jpg';
+        var fname = 'local'+'-j-'+panelDate+'-'+slot+'.jpg';
         var url = await uploadImgToStorage(compressed, fname);
         db.journals[key][field] = url;
       } catch(err){
@@ -3259,7 +3249,7 @@ function handleJImgDrop(event, slot){
       const field = 'img'+slot.charAt(0).toUpperCase()+slot.slice(1);
       setJImgPreview(slot, compressed);
       try {
-        var fname = (currentUser?currentUser.username:'anon')+'-j-'+panelDate+'-'+slot+'.jpg';
+        var fname = 'local'+'-j-'+panelDate+'-'+slot+'.jpg';
         var url = await uploadImgToStorage(compressed, fname);
         db.journals[key][field] = url;
       } catch(err){
@@ -3551,7 +3541,7 @@ function handleImgFile(input, slot){
   r.onload = e => compressImage(e.target.result, 1200, 900, 0.7, async function(compressed){
     setImgPreview(slot, compressed); // show preview immediately
     try {
-      var fname = (currentUser?currentUser.username:'anon')+'-'+Date.now()+'-'+slot+'.jpg';
+      var fname = 'local'+'-'+Date.now()+'-'+slot+'.jpg';
       var url = await uploadImgToStorage(compressed, fname);
       imgData[slot] = url; // replace base64 with URL
     } catch(err){ console.warn('Storage upload failed, using base64:', err); }
@@ -3567,7 +3557,7 @@ function handleImgDrop(e, slot){
   r.onload = ev => compressImage(ev.target.result, 1200, 900, 0.7, async function(compressed){
     setImgPreview(slot, compressed);
     try {
-      var fname = (currentUser?currentUser.username:'anon')+'-'+Date.now()+'-'+slot+'.jpg';
+      var fname = 'local'+'-'+Date.now()+'-'+slot+'.jpg';
       var url = await uploadImgToStorage(compressed, fname);
       imgData[slot] = url;
     } catch(err){ console.warn('Storage upload failed, using base64:', err); }
@@ -3976,8 +3966,11 @@ function refreshAll(){
 document.addEventListener('DOMContentLoaded',()=>{
   initTheme();
   initDDSettings();
-  initRememberMe();
   initReminder();
+  // โหลดข้อมูลจาก localStorage โดยตรง ไม่ต้อง login
+  var _saved = Store.get('tradelog');
+  if(_saved){ try{ db = JSON.parse(_saved); }catch(e){} }
+  document.getElementById('sideUsername').textContent = '👤 Local';
   // Build score pips for trade modal
   buildScorePips('conf-score');
   // Build score pips for journal panel
@@ -4202,13 +4195,12 @@ function setSyncStatus(msg, color) {
 }
 
 async function syncToSheets() {
-  if (!currentUser) return;
   setSyncStatus('⬆️ กำลัง sync...', 'var(--gold)');
   try {
     var value = JSON.stringify(db);
     // DELETE then INSERT to avoid large old rows causing timeout
-    await supaFetch('trade_data?username=eq.' + encodeURIComponent(currentUser.username), 'DELETE');
-    await supaFetch('trade_data', 'POST', { username: currentUser.username, data: value, updated_at: new Date().toISOString() });
+    await supaFetch('trade_data?username=eq.local', 'DELETE');
+    await supaFetch('trade_data', 'POST', { username: 'local', data: value, updated_at: new Date().toISOString() });
     var t = new Date().toLocaleTimeString('th-TH', {hour:'2-digit', minute:'2-digit'});
     setSyncStatus('✅ Synced ' + t, 'var(--green)');
     clearUnsaved();
@@ -4218,10 +4210,9 @@ async function syncToSheets() {
 }
 
 async function syncFromSheets(silent) {
-  if (!currentUser) return;
   if (!silent) setSyncStatus('⬇️ กำลังโหลด...', 'var(--gold)');
   try {
-    var rows = await supaFetch('trade_data?username=eq.' + encodeURIComponent(currentUser.username) + '&select=data,updated_at');
+    var rows = await supaFetch('trade_data?username=eq.local&select=data,updated_at');
     if (rows && rows.length > 0 && rows[0].data) {
       var remote = typeof rows[0].data === 'string' ? JSON.parse(rows[0].data) : rows[0].data;
       if (remote.trades || remote.accounts) {
